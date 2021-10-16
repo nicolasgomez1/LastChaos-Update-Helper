@@ -17,9 +17,9 @@
 <ProjectInfo ToolTipStyle="0">
 <Office2007Theme Theme="5"/>
 <WindowStyles>
-<Width>700</Width>
-<Height>400</Height>
-<WindowTitle>LastChaos Update Helper</WindowTitle>
+<Width>550</Width>
+<Height>376</Height>
+<WindowTitle>LastChaos Updater Helper</WindowTitle>
 <WindowStyle>0</WindowStyle>
 <FillColor>0</FillColor>
 </WindowStyles>
@@ -27,8 +27,8 @@
 <Movable>1</Movable>
 <AlwaysOnTop>0</AlwaysOnTop>
 <Resizable>1</Resizable>
-<MinWidth>700</MinWidth>
-<MinHeight>400</MinHeight>
+<MinWidth>550</MinWidth>
+<MinHeight>376</MinHeight>
 </WindowOptions>
 <TransparentWindow>
 <TransparentImage/>
@@ -65,13 +65,471 @@
 <Globals>
 <Script>Watcher			= ({});
 SettingsFile	= (_SourceFolder.."\\config.ini");
-tblConfig = ({"CONFIG_FRAMESETTINGS", "CONFIG_FRAMETITLESETTINGS", "CONFIG_FTPFRAME", "CONFIG_FTPTEXTFRAME", "CONFIG_Paragraph1", "CONFIG_Paragraph2", "CONFIG_Paragraph3", "CONFIG_Paragraph4", "CONFIG_Paragraph5", "CONFIG_Paragraph6", "CONFIG_FTP_SAVE", "CONFIG_FTP_TEST", "CONFIG_FTP_PROFILESELECTOR", "CONFIG_FTP_PATCHESFOLDER", "CONFIG_FTP_LAUNCHERFOLDER", "CONFIG_FTP_SHOWHIDE_PASSWORD", "CONFIG_FTP_PASSWORD", "CONFIG_FTP_USERNAME", "CONFIG_FTP_HOST", "CONFIG_CLIENTFOLDERPATHBROWSE", "CONFIG_CLIENTFOLDER"});
+TempFolder = (_SourceFolder.."\\temp");
+tblConfig = ({"CONFIG_SAVELOG", "CONFIG_MYSQL_TEST", "CONFIG_PROFILESELECTOR", "CONFIG_MYSQL_SHOWHIDE_PASSWORD", "CONFIG_Paragraph9", "CONFIG_Paragraph8", "CONFIG_Paragraph7", "CONFIG_Paragraph6", "CONFIG_MYSQL_USERNAME", "CONFIG_MYSQL_PASSWORD", "CONFIG_MYSQL_DBDATA", "CONFIG_MYSQL_HOST", "CONFIG_MYSQLTEXTFRAME", "CONFIG_FRAMETITLESETTINGS", "CONFIG_FTPTEXTFRAME", "CONFIG_Paragraph1", "CONFIG_Paragraph2", "CONFIG_Paragraph3", "CONFIG_Paragraph4", "CONFIG_Paragraph5", "CONFIG_Paragraph6", "CONFIG_FTP_SAVE", "CONFIG_FTP_TEST", "CONFIG_FTP_PATCHESFOLDER", "CONFIG_FTP_SHOWHIDE_PASSWORD", "CONFIG_FTP_PASSWORD", "CONFIG_FTP_USERNAME", "CONFIG_FTP_HOST", "CONFIG_CLIENTFOLDERPATHBROWSE", "CONFIG_CLIENTFOLDER"});
+
+tblMenu = ({});
+tblMenu[1] = ({});
+tblMenu[1].Text = ("Settings");
+tblMenu[1].ID = (1);
+tblMenu[1].Enabled = (true);
+---
+tblMenu[2] = ({});
+tblMenu[2].Text = ("---");
+tblMenu[2].ID = (0);
+---
+tblMenu[3] = ({});
+tblMenu[3].Text = ("Start");
+tblMenu[3].ID = (2);
+---
+tblMenu[4] = ({});
+tblMenu[4].Text = ("---");
+tblMenu[4].ID = (0);
+---
+tblMenu[5] = ({});
+tblMenu[5].Text = ("Stage 2");
+tblMenu[5].ID = (3);
+tblMenu[5].Enabled = (false);
+---
+tblMenu[6] = ({});
+tblMenu[6].Text = ("---");
+tblMenu[6].ID = (0);
+---
+tblMenu[7] = ({});
+tblMenu[7].Text = ("Stage 3");
+tblMenu[7].ID = (4);
+tblMenu[7].Enabled = (false);
 
 function GetConfig(Section, Value)
 	return INIFile.GetValue(SettingsFile, Section, Value);
 end
 
 WorkingFolder = GetConfig("General", "ClientFolderPath");
+
+function FolderDeleteTreeCallback(Source, Deleted, Total)
+	StatusDlg.SetMessage(("%.02f%%"):format(100*Deleted/Total));
+	StatusDlg.SetStatusText("Deleting\t:\t"..Source);
+	StatusDlg.SetMeterPos(100*Deleted/Total);
+	
+	if(Deleted == Total)then
+		return false;
+	else
+		return true;
+	end
+end
+
+function FTPDownloadCallback(nBytes, nTotal)
+    if(nTotal ~= 0)then
+    	local Percent = (nBytes/nTotal*100);
+    	
+    	StatusDlg.SetMeterPos(Percent);
+    	StatusDlg.SetStatusText("Downloading\t:\t"..Percent.."%");
+    end
+end
+
+function FTPUploadCallback(nBytes, nTotal)
+    if(nTotal ~= 0)then
+    	local Percent = (nBytes/nTotal*100);
+    	
+    	StatusDlg.SetMeterPos(Percent);
+    	StatusDlg.SetStatusText("Uploading\t:\t"..Percent.."%");
+    end
+end
+
+function ZipCallback(String, Percent, Status)
+	StatusDlg.SetMessage(String);
+	StatusDlg.SetStatusText("Zipping Progress\t:\t"..Percent.."%");
+	StatusDlg.SetMeterPos(Percent);
+end
+
+function Stage3()
+	local Continue = (true);
+	local ConnectionData;
+	--Tendria que verificar si ya existe una conexion mysql? hacer pruebas...
+	if(FTP.IsConnected())then
+		local Ret = Dialog.Message("Warning", "Do you want to close the current FTP connection?", MB_YESNO, MB_ICONEXCLAMATION, MB_DEFBUTTON1);
+		if(Ret == 6)then
+			FTP.Disconnect();
+			Continue = (true);
+		elseif(Ret == 7)then
+			Continue = (false);
+		end
+	else
+		Continue = (true);
+	end
+	
+	if(Continue == true)then------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------PROFILE SET
+		local tblProfiles = ({});
+		local SelectedProfile = (0);
+	
+		for _, Profile in pairs(INIFile.GetValueNames(SettingsFile, "Profiles")) do
+			tblProfiles[_] = (Profile);
+			if(Profile == GetConfig("General", "SelectedProfile"))then
+				SelectedProfile = (_);
+			end
+		end
+		
+		while(true)do
+			local Profile = Dialog.ComboBox("Stage 3", "Select a Profile", tblProfiles, tblProfiles[SelectedProfile], false, false, MB_ICONNONE);
+			if(Profile == "CANCEL")then
+				Continue = (false);
+				break;
+			else
+				PrintLog("[Stage 3]\tProfile selected : '"..Profile.."'.", "", "INFO");
+				ConnectionData = DelimitedToTable(GetConfig("Profiles", Profile), ",");
+				Continue = (true);
+				break;
+			end
+		end
+		
+		if(Continue == true)then
+			StatusDlg.Show(MB_ICONNONE, false);
+			StatusDlg.ShowProgressMeter(false);
+			StatusDlg.SetAutoSize(true);
+			StatusDlg.SetTitle("FTP and MySQL Prerequisites");
+			StatusDlg.SetMessage("Trying to connect to FTP Server...");
+			StatusDlg.SetStatusText("Hostname\t:\t"..ConnectionData[1].."\r\nUsername\t:\t"..ConnectionData[2].."\r\nPassword\t:\t"..ConnectionData[3]);
+			
+			FTP.Connect(ConnectionData[1], ConnectionData[2], Crypto.BlowfishDecryptString(ConnectionData[3], "iddqd"), "", true);-------------------------------------------------------------------------------------------------------------STEP &gt;&gt; CONNECT TO FTP
+			local FTPError = Application.GetLastError();
+			
+			if(FTPError ~= FTP.OK)then
+				StatusDlg.SetMessage("Connection to FTP Server failed...");
+				StatusDlg.SetStatusText("");
+				PrintLog("[Stage 3]\tFailed to connect to FTP Server, cannot continue.", "", "ERROR");
+				StatusDlg.Hide();
+				Continue = (false);
+			else
+				StatusDlg.SetMessage("Connection to FTP Server successfully established.");
+				StatusDlg.SetStatusText("");
+				PrintLog("[Stage 3]\tConnected to FTP Server.", "", "SUCCESS");
+				---
+				StatusDlg.SetMessage("Looking for Patches directory...");
+				StatusDlg.SetStatusText("Directory Path\t:\t"..ConnectionData[4]);
+				
+				FTP.ChangeDir(ConnectionData[4]);------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------STEP &gt;&gt; CHANGE TO PATCHES FOLDER
+				local WaitForError = FTP.GetLastResponse();
+				if(String.Left(WaitForError, 3) == "550")then
+					StatusDlg.SetMessage("Looking for Patches directory failed.");
+					StatusDlg.SetStatusText("FTP Error : "..WaitForError);
+					PrintLog("[Stage 3]\tFTP Error : "..WaitForError.." cannot continue.", "", "ERROR");
+					StatusDlg.Hide();
+					Continue = (false);
+				else
+					StatusDlg.SetMessage("Patches directory was found.");
+					StatusDlg.SetStatusText("");
+					PrintLog("[Stage 3]\tPatches directory : '"..ConnectionData[4].."' was found.", "", "SUCCESS");
+					---
+					StatusDlg.SetMessage("Looking for version file...");
+					StatusDlg.SetStatusText("Version file Path\t:\t"..ConnectionData[4].."/version.txt");
+					local FileList = FTP.ListFiles();
+					if(#FileList &gt; 0)then
+						local VersionExist = (false);
+						
+						for Count = 1, #FileList do
+							if(FileList[Count].Name == "version.txt")then-------------------------------------------------------------------------------------------------------------------------------------------------------------------STEP &gt;&gt; FIND VERSION FILE
+								VersionExist = (true);
+								break;
+							end
+						end
+						
+						if(VersionExist == true)then
+							StatusDlg.SetMessage("Version file was found.");
+							StatusDlg.SetStatusText("");
+							PrintLog("[Stage 3]\tVersion(version.txt) file was found.", "", "SUCCESS");
+							Continue = (true);
+						else
+							StatusDlg.SetMessage("Looking for version file failed.");
+							StatusDlg.SetStatusText("Version file(version.txt) does not exist on Patches directory.");
+							PrintLog("[Stage 3]\tVersion file(version.txt) does not exist on Patches directory, cannot continue.", "", "ERROR");
+							StatusDlg.Hide();
+							Continue = (false);
+						end
+					else
+						StatusDlg.SetMessage("Looking for version file failed.");
+						StatusDlg.SetStatusText("Directory\t:\t'"..ConnectionData[4].."' it's empty.");
+						PrintLog("[Stage 3]\tPatches directory : '"..ConnectionData[4].."' it's empty, cannot continue.", "", "ERROR");
+						StatusDlg.Hide();
+						Continue = (false);
+					end
+				end
+			end
+			
+			if(Continue == true)then
+				StatusDlg.SetMessage("Trying to connect to MySQL Server...");
+				StatusDlg.SetStatusText("Hostname\t:\t"..ConnectionData[5].."\r\nUsername\t:\t"..ConnectionData[6].."\r\nPassword\t:\t"..ConnectionData[7].."\r\nDB Data\t:\t"..ConnectionData[8]);
+				
+				MySQLConnection, MySQLError = MySQL:connect(ConnectionData[8], ConnectionData[6], ConnectionData[7], ConnectionData[5], 3306);-----------------------------------------------------------------------------------------------STEP &gt;&gt; CONNECT TO MySQL
+				if(MySQLError ~= nil)then
+					StatusDlg.SetMessage("Connection to MySQL Server failed...");
+					StatusDlg.SetStatusText("MySQL Error : "..String.Right(MySQLError, String.Length(MySQLError)-8));
+					PrintLog("[Stage 3]\tMySQL Error : "..String.Right(MySQLError, String.Length(MySQLError)-8).." cannot continue.", "", "ERROR");
+					StatusDlg.Hide();
+					Continue = (false);
+				else
+					StatusDlg.SetMessage("Connection to MySQL Server successfully established.");
+					StatusDlg.SetStatusText("Connected to Database\t:\t'"..ConnectionData[8].."'.");
+					PrintLog("[Stage 3]\tConnected to MySQL Database : '"..ConnectionData[8].."'.", "", "SUCCESS");
+					---
+					StatusDlg.SetMessage("Looking for t_clientversion table...");
+					StatusDlg.SetStatusText("Database\t:\t"..ConnectionData[8].."\tTable\t:\tt_clientversion");
+					
+					MySQLCursor, MySQLError = MySQLConnection:execute("SELECT * FROM "..ConnectionData[8]..".t_clientversion");---------------------------------------------------------------------------------------------------------------STEP &gt;&gt; FIND t_clientversion Table
+					if(MySQLError ~= nil)then
+						StatusDlg.SetMessage("Table\t:\t't_clientversion' not found.");
+						StatusDlg.SetStatusText("MySQL Error : "..String.Right(MySQLError, String.Length(MySQLError)-8));
+						PrintLog("MySQL Error : "..String.Right(MySQLError, String.Length(MySQLError)-8).." cannot continue.", "", "ERROR");
+						StatusDlg.Hide();
+						Continue = (false);
+					else
+						StatusDlg.SetMessage("Version file was found.");
+						StatusDlg.SetStatusText("");
+						PrintLog("[Stage 3]\tTable : 't_clientversion' was found.", "", "SUCCESS");
+						Continue = (true);
+						PrintLog("[Stage 3]\tAll prerequisites found.", "", "SUCCESS");
+					end
+				end
+				
+				if(Continue == true)then
+					PrintLog("[Stage 3]\tDownloading version file...", "", "INFO");
+					StatusDlg.SetTitle("Gettin version from FTP Server");
+					StatusDlg.SetMessage("Downloading version.txt from FTP Server...");
+					StatusDlg.ShowProgressMeter(true);
+					StatusDlg.SetMeterRange(0, 100);
+					FTP.Download("version.txt", _SourceFolder.."\\version.txt.TEMP", FTPDownloadCallback);
+					local FTPError = Application.GetLastError();
+					
+					StatusDlg.Hide();
+											
+					if(FTPError ~= FTP.OK)then
+						PrintLog("[Stage 3]\tFTP Error : ".._tblErrorMessages[FTPError].." cannot continue.", "", "ERROR");
+						Continue = (false);
+					else
+						PrintLog("[Stage 3]\tVersion file downloaded successfully.", "", "SUCCESS");
+						local Version = tonumber(TextFile.ReadToString(_SourceFolder.."\\version.txt.TEMP"));
+						
+						if(Version == 0)then
+							Version = (1);
+						end
+						
+						local UseCustomVersion = (nil);
+						
+						if(Version == "" or type(Version) ~= "number")then
+							while(true)do
+								local ManualVersion = Dialog.Input("Version file it's empty", "Please define a version for the update", "1", MB_ICONSTOP);
+								if(ManualVersion == "CANCEL")then
+									local Ret = Dialog.Message("Warning", "Are you sure you want to cancel?", MB_YESNO, MB_ICONEXCLAMATION, MB_DEFBUTTON1);
+									if(Ret == 6)then
+										Dialog.TimedMessage("Fuck you", "Well dude, u mom clean my socks...", 2000, MB_ICONNONE);
+										Continue = (false);
+										break;
+									end
+								elseif(type(tonumber(ManualVersion)) ~= "number")then
+									Dialog.Message("Error", "Version not valid.\r\nplease make sure to enter a valid numeric version.", MB_OK, MB_ICONSTOP, MB_DEFBUTTON1);
+								elseif(type(tonumber(ManualVersion)) == "number")then
+									Dialog.TimedMessage("New Version", "'"..ManualVersion.."' Has been defined as next update version.", 1200, MB_ICONINFORMATION);
+									UseCustomVersion = (ManualVersion);
+									Continue = (true);
+									break;
+								end	
+							end
+						else
+							Continue = (true);
+						end
+						
+						if(Continue == true)then
+							if(UseCustomVersion == nil)then
+								Version = (Version+1);
+							else
+								Version = (UseCustomVersion);
+							end
+							
+							local ZipPath = (_SourceFolder.."\\"..String.Replace(System.GetDate(DATE_FMT_ISO), "-", "_", true).."-"..String.Replace(System.GetTime(TIME_FMT_MIL), ":", "_", true).."-"..Version..".zip");
+							
+							StatusDlg.Show(MB_ICONNONE, false);
+							StatusDlg.ShowProgressMeter(true);
+							StatusDlg.SetAutoSize(true);
+							StatusDlg.SetMeterRange(0, 100);
+							StatusDlg.SetTitle("Zipping : "..String.Replace(System.GetDate(DATE_FMT_ISO), "-", "_", true).."-"..String.Replace(System.GetTime(TIME_FMT_MIL), ":", "_", true).."-"..Version..".zip");
+							StatusDlg.SetMessage("Please Wait...");
+							PrintLog("[Stage 3]\tCreating patch file...", "", "INFO");
+
+							Zip.Add(ZipPath, { _SourceFolder.."\\temp\\*.*"}, true, "", 5, ZipCallback, true);
+							local ZIPError = Application.GetLastError();
+							
+							StatusDlg.Hide();
+							
+							if(ZIPError == 0)then
+								PrintLog("[Stage 3]\tPatch file was created successfully.", "", "SUCCESS");
+								---
+								PrintLog("[Stage 3]\tCreating new version file...", "", "INFO");
+								
+								TextFile.WriteFromString(_SourceFolder.."\\version.txt.NEW", Version, false);
+								local TXTError = Application.GetLastError();
+								if(TXTError == 0)then
+									PrintLog("[Stage 3]\tVersion file was created.", "", "SUCCESS");
+									---
+									PrintLog("[Stage 3]\tTrying to upload patch files to server...", "", "INFO");
+									StatusDlg.SetTitle("Uploading patch files to server");
+									StatusDlg.SetMessage("Uploading\t:\t"..Version..".zip and version.txt");
+									StatusDlg.ShowProgressMeter(true);
+									StatusDlg.SetMeterRange(0, 100);
+									
+									FTP.Upload(ZipPath, Version..".zip", FTPUploadCallback);
+									local FTPError = Application.GetLastError();
+									if(FTPError == FTP.OK)then
+										PrintLog("[Stage 3]\tPatch file was uploaded to server successfully.", "", "SUCCESS");
+										
+										FTP.Upload(_SourceFolder.."\\version.txt.NEW", "version.txt", FTPUploadCallback);
+										local FTPError = Application.GetLastError();
+										if(FTPError == FTP.OK)then
+											PrintLog("[Stage 3]\tVersion file was uploaded to server successfully.", "", "SUCCESS");
+											MySQLCursor, MySQLError = MySQLConnection:execute("UPDATE "..ConnectionData[8]..".t_clientversion SET a_min = '"..Version.."' , a_max = '"..Version+1 .."'");
+											if(MySQLError ~= nil)then
+												PrintLog("[Stage 3]\tMySQL Error : "..String.Right(MySQLError, String.Length(MySQLError)-8).." cannot continue.", "", "ERROR");
+												---
+												PrintLog("[Stage 3]\tBecause the table could not be updated in the database, the changes will be reverted on the ftp server...", "", "WARNING");
+												FTP.Delete(Version..".zip");
+												---
+												StatusDlg.SetTitle("Reverting version file");
+												StatusDlg.SetMessage("Uploading Old\t:\tversion.txt");
+												StatusDlg.ShowProgressMeter(true);
+												StatusDlg.SetMeterRange(0, 100);
+												
+												FTP.Upload(_SourceFolder.."\\version.txt.TEMP", "version.txt", FTPUploadCallback);
+												local FTPError = Application.GetLastError();
+												
+												StatusDlg.Hide();
+												
+												if(FTPError == FTP.OK)then
+													PrintLog("[Stage 3]\tVersion file reverted successfully.", "", "SUCCESS");
+													--poner la funcion clean
+												else
+													PrintLog("[Stage 3]\tFTP Error : ".._tblErrorMessages[FTPError].." FUCK IT BYE BYE.", "", "ERROR");
+												end
+												--Continue = (false);
+											else
+												PrintLog("[Stage 3]\tTable : 't_clientversion' was successfully updated.", "", "SUCCESS");
+												MySQLConnection:close();
+												FTP.Disconnect();
+												PrintLog("[Stage 3]\tCompleted, New patch it's online and ready!.", "", "SUCCESS");
+												---
+												tblMenu[5].Enabled = (false);
+												tblMenu[7].Enabled = (false);
+												Application.SetMenu(tblMenu);
+												---
+												PrintLog("Cleaning residual files..", "", "INFO");
+												
+												File.Delete(_SourceFolder.."\\version.txt.TEMP", false, false, false, nil);
+												
+												File.Delete(_SourceFolder.."\\version.txt.NEW", false, false, false, nil);
+												
+												StatusDlg.Show(MB_ICONNONE, false);
+												StatusDlg.SetTitle("Cleaning temporary folder...");
+												StatusDlg.SetMessage("Please Wait...");
+												StatusDlg.ShowProgressMeter(true);
+												StatusDlg.SetMeterRange(0, 100);
+												
+												--Folder.DeleteTree(TempFolder, FolderDeleteTreeCallback);
+												Folder.Delete(TempFolder);
+												
+												StatusDlg.Hide();
+											end
+										else
+											PrintLog("[Stage 3]\tFTP Error : ".._tblErrorMessages[FTPError].." cannot continue.", "", "ERROR");
+											---
+											PrintLog("[Stage 3]\tBecause the Version file could not be uploaded to the server, the previously uploaded Patch file will be deleted.", "", "WARNING");
+											FTP.Delete(Version..".zip");
+											--poner la funcion clean
+											StatusDlg.Hide();
+											--Continue = (false);
+										end
+									else
+										PrintLog("[Stage 3]\tFTP Error : ".._tblErrorMessages[FTPError].." cannot continue.", "", "ERROR");
+										StatusDlg.Hide();
+										--Continue = (false);
+									end
+								else
+									PrintLog(_tblErrorMessages[TXTError].." cannot continue.", "", "ERROR");
+									--Continue = (false);
+								end
+							else
+								PrintLog("[Stage 3]\tZIP Error : ".._tblErrorMessages[ZIPError].." cannot continue.", "", "ERROR");
+								--Continue = (false);
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function Stage2()
+	--[[NOTES
+		la ruta se forma con doble \, sin enbargo funciona perfectamente.
+	]]
+	if(Grid.GetRowCount("Grid1") &gt; 0)then
+		--PrintLog("[Stage 2]\tCleaning temporary folder...", "", "INFO");
+		StatusDlg.SetTitle("Cleaning temporary folder...");
+		StatusDlg.SetMessage("Please Wait...");
+		StatusDlg.ShowProgressMeter(true);
+		StatusDlg.SetMeterRange(0, 100);
+
+		--Folder.DeleteTree(TempFolder, FolderDeleteTreeCallback);
+		Folder.Delete(TempFolder);
+		
+		StatusDlg.Hide();
+		
+		PrintLog("[Stage 2]\tPreparing temporary folder...", "", "INFO");
+		Folder.Create(TempFolder);
+		PrintLog("[Stage 2]\tStarted.", "", "INFO");
+		
+		for Count = 1, Grid.GetRowCount("Grid1") do
+			local Path = String.Replace(Grid.GetCellText("Grid1", Count, 2), WorkingFolder, "", true);
+			local Split = String.SplitPath(_SourceFolder.."\\temp\\"..Path);
+	
+			if(Split.Extension == "")then--FOLDER
+				local BuildingPath = (TempFolder);
+				for _, FolderName in pairs(DelimitedToTable(Path, "\\")) do
+					PrintLog("[Stage 2]\tMaking folder : '"..BuildingPath.."\\"..FolderName.."'...", "", "INFO");
+					Folder.Create(BuildingPath.."\\"..FolderName);
+					BuildingPath = (BuildingPath.."\\"..FolderName);
+				end
+			else---------------------------FILE
+				if(Folder.DoesExist(Split.Drive..Split.Folder))then
+					File.Copy(Grid.GetCellText("Grid1", Count, 2), TempFolder.."\\"..Path, true, true, false, true, nil);
+				else
+					local BuildingPath = (TempFolder);
+					local Split2 = String.SplitPath(Path);
+					
+					for _, FolderName in pairs(DelimitedToTable(String.Replace(Path, "\\"..Split2.Filename..Split2.Extension, "", true), "\\")) do
+						PrintLog("[Stage 2]\tMaking folder : '"..BuildingPath.."\\"..FolderName.."'...", "", "INFO");
+						Folder.Create(BuildingPath.."\\"..FolderName);
+						BuildingPath = (BuildingPath.."\\"..FolderName);
+					end
+					
+					if(Folder.DoesExist(Split.Drive..Split.Folder))then
+						PrintLog("[Stage 2]\tCopying file : '"..Grid.GetCellText("Grid1", Count, 2).."' &gt;&gt; '"..TempFolder.."\\"..Path.."'...", "", "INFO");
+						File.Copy(Grid.GetCellText("Grid1", Count, 2), TempFolder.."\\"..Path, true, true, false, true, nil);
+					end
+				end
+			end
+		end
+		
+		PrintLog("[Stage 2]\tCompleted.", "", "INFO");
+		local Ret = Dialog.Message("Stage 2 Completed", "Do you want to continue to Stage 3?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
+		if(Ret == 6)then
+			Stage3();
+		elseif(Ret == 7)then
+			tblMenu[5].Enabled = (true);
+			tblMenu[7].Enabled = (true);
+			Application.SetMenu(tblMenu);
+		end
+	else
+		PrintLog("[Stage 2]\tGrid it's empty.", "", "ERROR");
+	end
+end
 
 --[[
 	Desc	:	Print logs on console.
@@ -82,16 +540,16 @@ WorkingFolder = GetConfig("General", "ClientFolderPath");
 function PrintLog(Text, Tooltip, Type)
 	local Hint = ("");
 	
-	if(Type == "INFO")then			Type = ("&lt;font color='"..String.Replace(Theme.BlueColor, "0x", "#", false).."'&gt;INFO&lt;/font&gt;");
-	elseif(Type == "ERROR")then		Type = ("&lt;font color='"..String.Replace(Theme.RedColor, "0x", "#", false).."'&gt;ERROR&lt;/font&gt;");
-	elseif(Type == "SUCCESS")then	Type = ("&lt;font color='"..String.Replace(Theme.GreenColor, "0x", "#", false).."'&gt;SUCCESS&lt;/font&gt;");
-	elseif(Type == "WARNING")then	Type = ("&lt;font color='"..String.Replace(Theme.YellowColor, "0x", "#", false).."'&gt;WARNING&lt;/font&gt;");	end
+	if(Type == "INFO")then			Type = ("&lt;font color='"..String.Replace(Theme.BlueColor, "0x", "#", false).."'&gt;INFO\t\t&lt;/font&gt;");
+	elseif(Type == "ERROR")then		Type = ("&lt;font color='"..String.Replace(Theme.RedColor, "0x", "#", false).."'&gt;ERROR\t&lt;/font&gt;");
+	elseif(Type == "SUCCESS")then	Type = ("&lt;font color='"..String.Replace(Theme.GreenColor, "0x", "#", false).."'&gt;SUCCESS\t&lt;/font&gt;");
+	elseif(Type == "WARNING")then	Type = ("&lt;font color='"..String.Replace(Theme.YellowColor, "0x", "#", false).."'&gt;WARNING\t&lt;/font&gt;");	end
 	
 	if(Tooltip ~= "")then	Hint = (" (*)");	end
 	
 	local ItemColor = ListBoxEx.GetItemColor("Logs", ListBoxEx.GetTotalItems("Logs"), LBXISTATE_NORMAL);
-	if(ItemColor[1] == -1 or ItemColor[1] == Math.HexColorToNumber(Theme.ObjectItemNormalColor))then	ListBoxEx.AddItem("Logs", "&lt;p&gt;&lt;b&gt;&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..System.GetTime(TIME_FMT_MIL).."&lt;/font&gt; "..Type.." &lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;- "..Text..Hint.."&lt;/font&gt;&lt;/b&gt;&lt;/p&gt;", Tooltip, "", "", 0, LBXITEM_HTML, 0, {Math.HexColorToNumber(Theme.ObjectItemNormalColorB)}, nil, nil);
-	elseif(ItemColor[1] == Math.HexColorToNumber(Theme.ObjectItemNormalColorB))then		ListBoxEx.AddItem("Logs", "&lt;p&gt;&lt;b&gt;&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..System.GetTime(TIME_FMT_MIL).."&lt;/font&gt; "..Type.." &lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;- "..Text..Hint.."&lt;/font&gt;&lt;/b&gt;&lt;/p&gt;", Tooltip, "", "", 0, LBXITEM_HTML, 0, {Math.HexColorToNumber(Theme.ObjectItemNormalColor)}, nil, nil);		end
+	if(ItemColor[1] == -1 or ItemColor[1] == Math.HexColorToNumber(Theme.ObjectItemNormalColor))then	ListBoxEx.AddItem("Logs", "&lt;p&gt;&lt;b&gt;&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..System.GetTime(TIME_FMT_MIL).."&lt;/font&gt; "..Type.."&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..Text..Hint.."&lt;/font&gt;&lt;/b&gt;&lt;/p&gt;", Tooltip, "", "", 0, LBXITEM_HTML, 0, {Math.HexColorToNumber(Theme.ObjectItemNormalColorB)}, nil, nil);
+	elseif(ItemColor[1] == Math.HexColorToNumber(Theme.ObjectItemNormalColorB))then		ListBoxEx.AddItem("Logs", "&lt;p&gt;&lt;b&gt;&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..System.GetTime(TIME_FMT_MIL).."&lt;/font&gt; "..Type.."&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;"..Text..Hint.."&lt;/font&gt;&lt;/b&gt;&lt;/p&gt;", Tooltip, "", "", 0, LBXITEM_HTML, 0, {Math.HexColorToNumber(Theme.ObjectItemNormalColor)}, nil, nil);		end
 	
 	ListBoxEx.EnsureVisible("Logs", ListBoxEx.GetTotalItems("Logs"));
 end
@@ -138,22 +596,22 @@ if(Theme == "1")then --LIGHT
 		GreenColor = ("0x18A05E"),
 		BlueColor = ("0x4A8AF4"),
 		YellowColor	= ("0xFFCD43"),
-		BarColor = ("0x26A0DA")
+		BarColor = ("0x10536D")
 	});
 elseif(Theme == "0")then	--DARK
 	Theme = ({
-		BackgroundColor	= ("0x4C5E66"),
+		BackgroundColor		= ("0x445760"),
 		ObjectBackgroundColor =	("0x38454C"),
 		ObjectItemNormalColor =	("0x38454C"),
 		ObjectItemNormalColorB = ("0x404C53"),
-		ObjectItemHighLightColor = ("0x557D9C"),
+		ObjectItemHighLightColor = ("0x5B6C74"),
 		ObjectItemSelectionColor = ("0x385368"),
 		TextColor = ("0xFE9653"),
 		RedColor = ("0xDD5145"),
 		GreenColor = ("0x18A05E"),
 		BlueColor = ("0x4A8AF4"),
 		YellowColor = ("0xFFCD43"),
-		BarColor = ("0x26A0DA")
+		BarColor = ("0x10536D")
 	});
 end
 
@@ -183,6 +641,23 @@ function DelimitedToTable(String, Delimiter)
 	return tbl;
 end
 
+function LoadProfiles()
+	ComboBox.ResetContent("CONFIG_PROFILESELECTOR");
+	
+	for _, Profile in pairs(INIFile.GetValueNames(SettingsFile, "Profiles")) do
+		local Value = DelimitedToTable(GetConfig("Profiles", Profile), ",");
+
+		ComboBox.AddItem("CONFIG_PROFILESELECTOR", Profile, Value[1]..","..Value[2]..","..Value[3]..","..Value[4]..","..Value[5]..","..Value[6]..","..Value[7]..","..Value[8]);
+		
+		local Selected = GetConfig("General", "SelectedProfile");
+		if(Selected ~= "")then
+			if(Profile == Selected)then
+				ComboBox.SetSelected("CONFIG_PROFILESELECTOR", _);
+			end
+		end
+	end
+end
+
 function GetEventDataTable(eventDataString)
 	local tbReturn = DelimitedToTable(eventDataString, "|");
 	
@@ -201,104 +676,87 @@ function GetEventDataTable(eventDataString)
 end
 
 function Watcher.Initialize(objRef)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "Initialize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "Initialize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.UnInitialize(objRef)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "UnInitialize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "UnInitialize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 
 function Watcher.GetPath(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetPath", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetPath", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 end
 function Watcher.GetFilter(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetFilter", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetFilter", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 end
 function Watcher.GetBufferSize(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetBufferSize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetBufferSize", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.GetNotifyFilter(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetNotifyFilter", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetNotifyFilter", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 end
 function Watcher.GetEventType(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetEventType", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetEventType", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 end
 function Watcher.GetLogErrors(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetLogErrors", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetLogErrors", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.GetIncludeSubdirectories(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetIncludeSubdirectories", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetIncludeSubdirectories", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.GetEnableRaisingEvents(objRef)
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetEnableRaisingEvents", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetEnableRaisingEvents", "\""..objRef.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.GetLoggedEvent(objRef)
-	eventDataString = DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetLoggedEvent", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	eventDataString = DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetLoggedEvent", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 	return GetEventDataTable(eventDataString);
 end
 function Watcher.GetLoggedError(objRef)
-	errorDataString = DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetLoggedError", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
+	errorDataString = DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetLoggedError", "\""..objRef.."\"", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 	return GetErrorDataTable(errorDataString);
 end
 
 function Watcher.SetPath(objRef, path)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetPath", "\""..objRef.."\""..",".."\""..path.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetPath", "\""..objRef.."\""..",".."\""..path.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetFilter(objRef, filter)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetFilter", "\""..objRef.."\""..",".."\""..filter.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetFilter", "\""..objRef.."\""..",".."\""..filter.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetBufferSize(objRef, bufferSize)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetBufferSize", "\""..objRef.."\""..","..bufferSize, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetBufferSize", "\""..objRef.."\""..","..bufferSize, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetNotifyFilter(objRef, notifyFilter)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetNotifyFilter", "\""..objRef.."\""..",".."\""..notifyFilter.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetNotifyFilter", "\""..objRef.."\""..",".."\""..notifyFilter.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetEventType(objRef, eventType)
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetEventType", "\""..objRef.."\""..",".."\""..eventType.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetEventType", "\""..objRef.."\""..",".."\""..eventType.."\"", DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetLogErrors(objRef, logErrors)
 	if logErrors == true then logErrors = 1; else logErrors = 0; end
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetLogErrors", "\""..objRef.."\""..","..logErrors, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetLogErrors", "\""..objRef.."\""..","..logErrors, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetIncludeSubdirectories(objRef, includeSubdirectories)
 	if includeSubdirectories == true then includeSubdirectories = 1; else includeSubdirectories = 0; end
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetIncludeSubdirectories", "\""..objRef.."\""..","..includeSubdirectories, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetIncludeSubdirectories", "\""..objRef.."\""..","..includeSubdirectories, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 function Watcher.SetEnableRaisingEvents(objRef, enableRaisingEvents)
 	if enableRaisingEvents == true then enableRaisingEvents = 1; else enableRaisingEvents = 0; end
-	DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "SetEnableRaisingEvents", "\""..objRef.."\""..","..enableRaisingEvents, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
+	DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "SetEnableRaisingEvents", "\""..objRef.."\""..","..enableRaisingEvents, DLL_RETURN_TYPE_LONG, DLL_CALL_STDCALL);
 end
 
 function Watcher.GetError()
-	return DLL.CallFunction("AutoPlay\\Docs\\Watcher.dll", "GetError", "", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
-end
-
-function LoadProfiles()
-	ComboBox.ResetContent("CONFIG_FTP_PROFILESELECTOR");
-	
-	for _, Profile in pairs(INIFile.GetValueNames(SettingsFile, "FTP_Profiles")) do
-		local Value = DelimitedToTable(GetConfig("FTP_Profiles", Profile), ",");
-
-		ComboBox.AddItem("CONFIG_FTP_PROFILESELECTOR", Profile, Value[1]..","..Value[2]..","..Value[3]..","..Value[4]..","..Value[5]);
-		
-		local Selected = GetConfig("General", "SelectedProfile");
-		if(Selected ~= "")then
-			if(Profile == Selected)then
-				ComboBox.SetSelected("CONFIG_FTP_PROFILESELECTOR", _);
-			end
-		end
-	end
+	return DLL.CallFunction("AutoPlay\\Scripts\\Watcher.dll", "GetError", "", DLL_RETURN_TYPE_STRING, DLL_CALL_STDCALL);
 end</Script>
 <BookMarks count="0">
 </BookMarks>
-<DesignCodeLine>8</DesignCodeLine>
-<DesignCodeCol>55</DesignCodeCol>
+<DesignCodeLine>414</DesignCodeLine>
+<DesignCodeCol>28</DesignCodeCol>
 </Globals>
 <Defaults>
 <StartupPage>_PageFirst</StartupPage>
 <MouseOverSoundDefault>AutoPlay\Audio\High1.ogg</MouseOverSoundDefault>
 <MouseClickSoundDefault>AutoPlay\Audio\Click1.ogg</MouseClickSoundDefault>
 <MemMngMethod>0</MemMngMethod>
-<UserPrivilegeLevel>0</UserPrivilegeLevel>
+<UserPrivilegeLevel>2</UserPrivilegeLevel>
 </Defaults>
 <TargetMedia>
 <TargetMediaSize>4</TargetMediaSize>
@@ -341,7 +799,7 @@ end</Script>
 <SkinSubStyle/>
 </RuntimeSkin>
 <Databases>
-<MySQL>0</MySQL>
+<MySQL>1</MySQL>
 <SQLite3>0</SQLite3>
 <Oracle>0</Oracle>
 <ODBC>0</ODBC>
@@ -364,14 +822,28 @@ end</Script>
 <Event>
 <Name>On Shutdown</Name>
 <Args/>
-<Script/>
+<Script>if(FTP.IsConnected())then
+	FTP.Disconnect();
+end
+
+MySQL:close();
+
+if(GetConfig("General", "SaveLog") == "true")then
+	local Log = ("\r\n----------------------------------------("..System.GetDate(DATE_FMT_ISO)..")---------------------------------------");
+	
+	for Count = 1, ListBoxEx.GetTotalItems("Logs") do
+		Log = (Log.."\r\n"..ListBoxEx.GetItemText("Logs", Count, true));
+	end
+	
+	TextFile.WriteFromString(_SourceFolder.."\\log.log", Log, true);
+end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
+<DesignCodeLine>7</DesignCodeLine>
+<DesignCodeCol>19</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -384,7 +856,7 @@ end</Script>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>17</DesignCodeLine>
+<DesignCodeLine>0</DesignCodeLine>
 <DesignCodeCol>0</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
@@ -393,15 +865,14 @@ end</Script>
 <Name>On Menu</Name>
 <Args>number e_ID, table e_ItemInfo</Args>
 <Script>if(e_ID ==  1)then
-	local tblMenu = Application.GetMenu();
-	if(e_ItemInfo.Text == "Settings")then
+	if(tblMenu[1].Text == "Settings")then
 		tblMenu[1].Text = ("Main");
 		ShowHide({"Grid1"}, false);
 		Group.SetVisible("ConfigPanel", true);
 		ShowHide(tblConfig, true);
 		Input.SetText("CONFIG_CLIENTFOLDER", String.AbbreviateFilePath(GetConfig("General", "ClientFolderPath"), 24));
 		LoadProfiles();
-	elseif(e_ItemInfo.Text == "Main")then
+	elseif(tblMenu[1].Text == "Main")then
 		tblMenu[1].Text = ("Settings");
 		ShowHide(tblConfig, false);
 		ShowHide({"Grid1"}, true);
@@ -412,16 +883,13 @@ end</Script>
 end
 
 if(e_ID == 2)then
-	local tblMenu = ({});
-
-	if(e_ItemInfo.Text == "Start")then
+	if(tblMenu[3].Text == "Start")then
 		ShowHide(tblConfig, false);
 		ShowHide({"Grid1"}, true);
 		Group.SetVisible("ConfigPanel", false);
 		
-		table.insert(tblMenu, 1, {Text = "Settings", ID = 1, Enabled = false});
-		table.insert(tblMenu, 2, {Text = "---"});
-		table.insert(tblMenu, 3, {Text = "Stop", ID = 2, Enabled = true});
+		tblMenu[1].Enabled = (false);
+		tblMenu[3].Text = ("Stop");
 		
 		Window.SetText(Application.GetWndHandle(), "Working Folder : "..WorkingFolder);
 		
@@ -444,48 +912,56 @@ if(e_ID == 2)then
 		Watcher.SetEnableRaisingEvents("watcher2", true);
 		
 		Page.StartTimer(1000, 10);
-
-		Grid.DeleteNonFixedRows("Grid1", true);
 		
-		PrintLog("File watcher has been started At : '"..WorkingFolder.."'.", "", "INFO");
-	elseif(e_ItemInfo.Text == "Stop")then
-		table.insert(tblMenu, 1, {Text = "Settings", ID = 1, Enabled = true});
-		table.insert(tblMenu, 2, {Text = "---"});
-		table.insert(tblMenu, 3, {Text = "Start", ID = 2, Enabled = true});
+		if(Grid.GetRowCount("Grid1") &gt; 1)then
+			local Ret = Dialog.Message("Warning", "The grid is not empty, do you want to empty it?", MB_YESNO, MB_ICONEXCLAMATION, MB_DEFBUTTON1);
+			if(Ret == 6)then
+				Grid.DeleteNonFixedRows("Grid1", true);
+			end
+		end
 		
-		Window.SetText(Application.GetWndHandle(), "LastChaos Update Helper");
+		PrintLog("[Stage 1]\tFile watcher has been started At : '"..WorkingFolder.."'.", "", "INFO");
+	elseif(tblMenu[3].Text == "Stop")then
+		tblMenu[1].Enabled = (true);
+		tblMenu[3].Text = ("Start");
+		
+		Window.SetText(Application.GetWndHandle(), "LastChaos Updater Helper");
 		
 		Watcher.UnInitialize("watcher1");
 		Watcher.UnInitialize("watcher2");
 		
 		Page.StopTimer(1000);
-		PrintLog("File watcher stopped.", "", "INFO");
-		local Ret = Dialog.Message("Step 2", "Do you want to create the patch?", MB_YESNOCANCEL, MB_ICONINFORMATION, MB_DEFBUTTON1);
-		if(Ret == 6)then--SI
-			if(#Grid.GetRowCount("Grid1") &gt; 0)then
-				Folder.Create(_SourceFolder.."\\temp");
-				File.SetAttributes(_SourceFolder.."\\temp", {Temporary = true});
-			
-				for Count = 1, Grid.GetRowCount("Grid1") do
-					local Path = Grid.GetCellText("Grid1", Count, 3);
-				end
-			else
-				--error pls make stage 1 first.
+		
+		PrintLog("[Stage 1]\tFile watcher stopped.", "", "INFO");
+		
+		if(Grid.GetRowCount("Grid1") &gt; 1)then
+			local Ret = Dialog.Message("Stage 1 Completed", "Do you want to continue to Stage 2?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
+			if(Ret == 6)then
+				Stage2();
+			elseif(Ret == 7)then
+				tblMenu[5].Enabled = (true);
+				Application.SetMenu(tblMenu);
 			end
-		elseif(Ret == 7)then--NO
-		elseif(Ret == 2)then--CANCEL crear el boton step 2 en el menu bar
 		end
 	end
 
 	Application.SetMenu(tblMenu);
+end
+
+if(e_ID == 3)then
+	Stage2();
+end
+
+if(e_ID == 4)then
+	Stage3();
 end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>70</DesignCodeLine>
-<DesignCodeCol>3</DesignCodeCol>
+<DesignCodeLine>75</DesignCodeLine>
+<DesignCodeCol>4</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -497,13 +973,13 @@ end</Script>
 <FileVer2>0</FileVer2>
 <FileVer3>0</FileVer3>
 <FileVer4>0</FileVer4>
-<ProductVer1>1</ProductVer1>
+<ProductVer1>2</ProductVer1>
 <ProductVer2>0</ProductVer2>
-<ProductVer3>0</ProductVer3>
-<ProductVer4>0</ProductVer4>
+<ProductVer3>2</ProductVer3>
+<ProductVer4>1</ProductVer4>
 <Comments>Created with AutoPlay Media Studio</Comments>
 <Company>NicolasG</Company>
-<FileDescription>Monitor Folder, make Zip, upload to ftp server and Update Version File on host.</FileDescription>
+<FileDescription/>
 <LegalCopyright/>
 <LegalTrademarks/>
 <PrivateBuild/>
@@ -517,30 +993,6 @@ end</Script>
 <UseIcons>0</UseIcons>
 <BitmapIconFile/>
 <TransColor format="hex">ffffff</TransColor>
-<MenuItem>
-<Text>Settings</Text>
-<ID>1</ID>
-<Enabled>1</Enabled>
-<Checked>0</Checked>
-<SubMenu/>
-<IconID>-1</IconID>
-</MenuItem>
-<MenuItem>
-<Text>---</Text>
-<ID>0</ID>
-<Enabled>1</Enabled>
-<Checked>0</Checked>
-<SubMenu/>
-<IconID>-1</IconID>
-</MenuItem>
-<MenuItem>
-<Text>Start</Text>
-<ID>2</ID>
-<Enabled>1</Enabled>
-<Checked>0</Checked>
-<SubMenu/>
-<IconID>-1</IconID>
-</MenuItem>
 </MenuBar>
 </ProjectInfo>
 <Page>
@@ -578,7 +1030,9 @@ end</Script>
 <Event>
 <Name>On Show</Name>
 <Args/>
-<Script>for _, Object in pairs(Page.EnumerateObjects())do
+<Script>Application.SetMenu(tblMenu);
+
+for _, Object in pairs(Page.EnumerateObjects())do
 	local ObjType = Page.GetObjectType(Object);
 	if(ObjType == OBJECT_PARAGRAPH)then
 		Paragraph.SetProperties(Object, {BGColor = Math.HexColorToNumber(Theme.BackgroundColor), ColorNormal = Math.HexColorToNumber(Theme.TextColor), ColorHighlight = Math.HexColorToNumber(Theme.TextColor), ColorDown = Math.HexColorToNumber(Theme.TextColor)});
@@ -591,7 +1045,9 @@ end</Script>
 	elseif(ObjType == OBJECT_COMBOBOX)then
 		ComboBox.SetProperties(Object, {BackgroundColor = Math.HexColorToNumber(Theme.BackgroundColor), TextColor = Math.HexColorToNumber(Theme.TextColor)});
 	elseif(ObjType == OBJECT_GRID)then
-		Grid.SetProperties(Object, {TitleTipTextColor = Math.HexColorToNumber(Theme.TextColor), TitleTipBackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor), TextBackgroundColor = Math.HexColorToNumber(Theme.ObjectItemNormalColorB), GridLines = 0, GridLineColor = Math.HexColorToNumber(Theme.ObjectItemHighLightColor), FixedBackgroundColor = Math.HexColorToNumber(Theme.ObjectItemHighLightColor), GridBackgroundColor = Math.HexColorToNumber(Theme.BackgroundColor), TextColor = Math.HexColorToNumber(Theme.TextColor), FixedTextColor = Math.HexColorToNumber(Theme.TextColor)});
+		Grid.SetProperties(Object, {TitleTipTextColor = Math.HexColorToNumber(Theme.TextColor), TitleTipBackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor), TextBackgroundColor = Math.HexColorToNumber(Theme.ObjectItemNormalColorB), GridLines = 0, GridLineColor = Math.HexColorToNumber(Theme.ObjectItemHighLightColor), FixedBackgroundColor = Math.HexColorToNumber("0x2B373D"), GridBackgroundColor = Math.HexColorToNumber(Theme.BackgroundColor), TextColor = Math.HexColorToNumber(Theme.TextColor), FixedTextColor = Math.HexColorToNumber(Theme.TextColor)});
+	--elseif(ObjType == OBJECT_RADIOBUTTON)then
+	--	RadioButton.SetProperties(Object, {ColorNormal = Math.HexColorToNumber(Theme.TextColor), ColorHighlight = Math.HexColorToNumber(Theme.TextColor), ColorDown = Math.HexColorToNumber(Theme.TextColor)});
 	end
 end
 
@@ -603,41 +1059,32 @@ ListBoxEx.SetTooltipProperties("Logs", Math.HexColorToNumber(Theme.TextColor), M
 ListBoxEx.AddItem("Logs", "&lt;p&gt;&lt;b&gt;&lt;font color='"..String.Replace(Theme.TextColor, "0x", "#", false).."'&gt;Initializing LastChaos Update Helper...&lt;/font&gt;&lt;/b&gt;&lt;/p&gt;", "", "", "", 0, LBXITEM_HTML, 0, nil, nil, nil);
 
 Grid.SetCellText("Grid1", 0, 0, "EVENT", true);
-Grid.SetColumnWidth("Grid1", 0, 80, true);
-
+Grid.SetColumnWidth("Grid1", 0, 65, true);
 Grid.SetCellText("Grid1", 0, 1, "FILENAME", true);
 Grid.SetColumnWidth("Grid1", 1, 200, true);
-
 Grid.SetCellText("Grid1", 0, 2, "FULL PATH", true);
+
 Grid.ExpandLastColumn("Grid1", true);
 
 Grid.SetListMode("Grid1", true);
 
 Group.Create("ConfigPanel");
-
+Group.AddObject("ConfigPanel", "CONFIG_MYSQLFRAME");
 Group.AddObject("ConfigPanel", "CONFIG_FTPFRAME");
 Group.AddObject("ConfigPanel", "CONFIG_FRAMESETTINGS");
 
-
-Row = Grid.InsertRow("Grid1", -1, true);
-Grid.SetCellText("Grid1", Row, 0, "CREATED", true);
-Grid.SetCellText("Grid1", Row, 1, "Nueva carpeta", true);
-Grid.SetCellText("Grid1", Row, 2, "C:\\Users\\nicoh\\Documents\\GitHub\\LastChaos\\ClientBinaries\\Nueva carpeta", true);
-Row = Grid.InsertRow("Grid1", -1, true);
-Grid.SetCellText("Grid1", Row, 0, "CREATED", true);
-Grid.SetCellText("Grid1", Row, 1, "Nueva carpeta", true);
-Grid.SetCellText("Grid1", Row, 2, "C:\\Users\\nicoh\\Documents\\GitHub\\LastChaos\\ClientBinaries\\Nueva carpeta\\Nueva carpeta", true);
-Row = Grid.InsertRow("Grid1", -1, true);
-Grid.SetCellText("Grid1", Row, 0, "CREATED", true);
-Grid.SetCellText("Grid1", Row, 1, "Nuevo documento de texto.txt", true);
-Grid.SetCellText("Grid1", Row, 2, "C:\\Users\\nicoh\\Documents\\GitHub\\LastChaos\\ClientBinaries\\Nueva carpeta\\Nuevo documento de texto.txt", true);</Script>
+if(GetConfig("General", "SaveLog") == "true")then
+	CheckBox.SetChecked("CONFIG_SAVELOG", true);
+else
+	CheckBox.SetChecked("CONFIG_SAVELOG", false);
+end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>52</DesignCodeLine>
-<DesignCodeCol>151</DesignCodeCol>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>29</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -810,15 +1257,14 @@ end
 <Event>
 <Name>On Size</Name>
 <Args>number e_WindowWidth, number e_WindowHeight, number e_PageWidth, number e_PageHeight, number e_Type</Args>
-<Script>Grid.ExpandLastColumn("Grid1", true);
-Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
+<Script>Grid.ExpandLastColumn("Grid1", true);</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>1</DesignCodeLine>
-<DesignCodeCol>57</DesignCodeCol>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>37</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -908,9 +1354,9 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <AutoResize>12</AutoResize>
 <Coordinates>
 <Top>-3</Top>
-<Bottom>294</Bottom>
+<Bottom>263</Bottom>
 <Left>-3</Left>
-<Right>621</Right>
+<Right>552</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -964,16 +1410,16 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <CellDragAndDrop>0</CellDragAndDrop>
 <ResizableRows>0</ResizableRows>
 <ResizableColumns>1</ResizableColumns>
-<GridLines>3</GridLines>
+<GridLines>1</GridLines>
 <CSVFile/>
 <CSVLoadMode>0</CSVLoadMode>
 <CSVDelimeter>,</CSVDelimeter>
 <CSVAutoSize>1</CSVAutoSize>
 <FontData>
-<FontName>Segoe UI</FontName>
+<FontName>Segoe UI Semibold</FontName>
 <CharacterSet>0</CharacterSet>
 <Height>-12</Height>
-<Weight>400</Weight>
+<Weight>600</Weight>
 <Italic>0</Italic>
 <Underline>0</Underline>
 <StrikeOut>0</StrikeOut>
@@ -986,20 +1432,20 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Name>CONFIG_FRAMESETTINGS</Name>
 <VisibleAtDesignTime>1</VisibleAtDesignTime>
 <VisibleAtRunTime>0</VisibleAtRunTime>
-<Locked>0</Locked>
+<Locked>1</Locked>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
 <Top>10</Top>
-<Bottom>281</Bottom>
+<Bottom>251</Bottom>
 <Left>10</Left>
-<Right>251</Right>
+<Right>541</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -1080,7 +1526,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1199,20 +1645,20 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Name>CONFIG_FTPFRAME</Name>
 <VisibleAtDesignTime>1</VisibleAtDesignTime>
 <VisibleAtRunTime>0</VisibleAtRunTime>
-<Locked>0</Locked>
+<Locked>1</Locked>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
 <Top>70</Top>
-<Bottom>271</Bottom>
+<Bottom>241</Bottom>
 <Left>20</Left>
-<Right>241</Right>
+<Right>281</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -1293,7 +1739,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1416,7 +1862,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1539,7 +1985,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1547,8 +1993,8 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Coordinates>
 <Top>88</Top>
 <Bottom>112</Bottom>
-<Left>30</Left>
-<Right>121</Right>
+<Left>20</Left>
+<Right>111</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -1662,7 +2108,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1670,8 +2116,8 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Coordinates>
 <Top>118</Top>
 <Bottom>142</Bottom>
-<Left>30</Left>
-<Right>121</Right>
+<Left>20</Left>
+<Right>111</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -1785,7 +2231,7 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1793,8 +2239,8 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Coordinates>
 <Top>148</Top>
 <Bottom>172</Bottom>
-<Left>30</Left>
-<Right>121</Right>
+<Left>20</Left>
+<Right>111</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -1906,9 +2352,9 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <VisibleAtRunTime>0</VisibleAtRunTime>
 <Locked>0</Locked>
 <Enabled>1</Enabled>
-<ToolTip>Example : htdocs/lc_updater</ToolTip>
+<ToolTip>Example : /lc_updater/patches</ToolTip>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -1916,131 +2362,8 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Coordinates>
 <Top>178</Top>
 <Bottom>202</Bottom>
-<Left>27</Left>
-<Right>121</Right>
-</Coordinates>
-<Ratios>
-<WidthRatio>-1.000000</WidthRatio>
-<HeightRatio>-1.000000</HeightRatio>
-</Ratios>
-<Event>
-<Name>On Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Right-Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Enter</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Leave</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Actions>
-<Action>
-<Type>0</Type>
-<Name>None</Name>
-<Exit>0</Exit>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-</Action>
-</Actions>
-<Text>
-<Body>Launcher Folder</Body>
-<NormalColor>0</NormalColor>
-<HighlightColor>0</HighlightColor>
-<MouseDownColor>0</MouseDownColor>
-<DisabledColor>12632256</DisabledColor>
-<BorderColor>0</BorderColor>
-<BackColor>16777215</BackColor>
-<FontData>
-<FontName>Segoe UI Semibold</FontName>
-<CharacterSet>0</CharacterSet>
-<Height>-12</Height>
-<Weight>600</Weight>
-<Italic>0</Italic>
-<Underline>0</Underline>
-<StrikeOut>0</StrikeOut>
-<AntiAlias>1</AntiAlias>
-</FontData>
-<Alignment>2</Alignment>
-<TransBG>1</TransBG>
-<VSMode>2</VSMode>
-<HSMode>2</HSMode>
-<SBStyle>0</SBStyle>
-<SBSkin/>
-<Border>0</Border>
-<MouseOverSndMode>0</MouseOverSndMode>
-<MouseOverSound/>
-<MouseClickSndMode>0</MouseClickSndMode>
-<MouseClickSound/>
-</Text>
-</Object>
-<Object>
-<Type>2</Type>
-<Name>CONFIG_Paragraph6</Name>
-<VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>0</VisibleAtRunTime>
-<Locked>0</Locked>
-<Enabled>1</Enabled>
-<ToolTip>Example : htdocs/lc_updater/patches</ToolTip>
-<Cursor>0</Cursor>
-<Group>5</Group>
-<MaintainAspectRatio>0</MaintainAspectRatio>
-<Pin>0</Pin>
-<TabIndex>-1</TabIndex>
-<AutoResize>0</AutoResize>
-<Coordinates>
-<Top>208</Top>
-<Bottom>232</Bottom>
-<Left>27</Left>
-<Right>121</Right>
+<Left>20</Left>
+<Right>111</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2152,18 +2475,18 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <VisibleAtRunTime>0</VisibleAtRunTime>
 <Locked>0</Locked>
 <Enabled>1</Enabled>
-<ToolTip>Save on (only) Profile.</ToolTip>
+<ToolTip>Left click Save Profile / Right click Save on New Profile.</ToolTip>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
-<Top>240</Top>
-<Bottom>263</Bottom>
-<Left>190</Left>
-<Right>231</Right>
+<Top>40</Top>
+<Bottom>63</Bottom>
+<Left>330</Left>
+<Right>371</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2172,16 +2495,16 @@ Grid.AutoSizeColumn("Grid1", 3, GVS_DEFAULT, true, true);</Script>
 <Event>
 <Name>On Click</Name>
 <Args/>
-<Script>local SelectedProfile = ComboBox.GetSelected("CONFIG_FTP_PROFILESELECTOR");
+<Script>local SelectedProfile = ComboBox.GetSelected("CONFIG_PROFILESELECTOR");
 
 if(SelectedProfile ~= -1)then
-	local Profile = ComboBox.GetItemText("CONFIG_FTP_PROFILESELECTOR", SelectedProfile);
+	local Profile = ComboBox.GetItemText("CONFIG_PROFILESELECTOR", SelectedProfile);
 	
-	INIFile.SetValue(SettingsFile, "FTP_Profiles", Profile, Input.GetText("CONFIG_FTP_HOST")..","..Input.GetText("CONFIG_FTP_USERNAME")..","..Crypto.BlowfishEncryptString(Input.GetText("CONFIG_FTP_PASSWORD"), "iddqd", 0)..","..Input.GetText("CONFIG_FTP_LAUNCHERFOLDER")..","..Input.GetText("CONFIG_FTP_PATCHESFOLDER"));
+	INIFile.SetValue(SettingsFile, "Profiles", Profile, Input.GetText("CONFIG_FTP_HOST")..","..Input.GetText("CONFIG_FTP_USERNAME")..","..Crypto.BlowfishEncryptString(Input.GetText("CONFIG_FTP_PASSWORD"), "iddqd", 0)..","..Input.GetText("CONFIG_FTP_PATCHESFOLDER")..","..Input.GetText("CONFIG_MYSQL_HOST")..","..Input.GetText("CONFIG_MYSQL_USERNAME")..","..Crypto.BlowfishEncryptString(Input.GetText("CONFIG_MYSQL_PASSWORD"), "iddqd", 0)..","..Input.GetText("CONFIG_MYSQL_DBDATA"));
 		
 	INIFile.SetValue(SettingsFile, "General", "SelectedProfile", Profile);
 	
-	Dialog.TimedMessage("FTP Setup Profile", "Profile : "..ComboBox.GetItemText("CONFIG_FTP_PROFILESELECTOR", SelectedProfile).." updated.", 1200, MB_ICONINFORMATION);
+	Dialog.TimedMessage("Profile setup", "Profile : "..ComboBox.GetItemText("CONFIG_PROFILESELECTOR", SelectedProfile).." updated.", 1200, MB_ICONINFORMATION);
 	
 	LoadProfiles();
 end</Script>
@@ -2190,22 +2513,40 @@ end</Script>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>5</DesignCodeLine>
-<DesignCodeCol>36</DesignCodeCol>
+<DesignCodeLine>9</DesignCodeLine>
+<DesignCodeCol>35</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
 <Event>
 <Name>On Right-Click</Name>
 <Args/>
-<Script/>
+<Script>while(true)do
+	local ProfileName = Dialog.Input("Make new FTP Profile", "Profile Name :", "", MB_ICONNONE);
+	
+	if(ProfileName == "CANCEL")then
+		break;
+	elseif(ProfileName == "")then
+		Dialog.Message("Error", "Please type a valid profile name.", MB_OK, MB_ICONSTOP, MB_DEFBUTTON1);
+	else
+
+		INIFile.SetValue(SettingsFile, "Profiles", ProfileName, Input.GetText("CONFIG_FTP_HOST")..","..Input.GetText("CONFIG_FTP_USERNAME")..","..Crypto.BlowfishEncryptString(Input.GetText("CONFIG_FTP_PASSWORD"), "iddqd", 0)..","..Input.GetText("CONFIG_FTP_PATCHESFOLDER")..","..Input.GetText("CONFIG_MYSQL_HOST")..","..Input.GetText("CONFIG_MYSQL_USERNAME")..","..Crypto.BlowfishEncryptString(Input.GetText("CONFIG_MYSQL_PASSWORD"), "iddqd", 0)..","..Input.GetText("CONFIG_MYSQL_DBDATA"));
+			
+		INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ProfileName);
+		
+		Dialog.TimedMessage("Profile setup", "Profile : "..ProfileName.." added.", 1200, MB_ICONINFORMATION);
+		
+		LoadProfiles();
+		break;
+	end
+end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
+<DesignCodeLine>5</DesignCodeLine>
+<DesignCodeCol>25</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -2299,16 +2640,16 @@ end</Script>
 <Enabled>1</Enabled>
 <ToolTip>Test FTP Connection(Setup from fields, not need be saved on first place).</ToolTip>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
-<Top>240</Top>
-<Bottom>263</Bottom>
-<Left>150</Left>
-<Right>191</Right>
+<Top>210</Top>
+<Bottom>233</Bottom>
+<Left>30</Left>
+<Right>271</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2317,57 +2658,108 @@ end</Script>
 <Event>
 <Name>On Click</Name>
 <Args/>
-<Script>local HOST = Input.GetText("CONFIG_FTP_HOST");
+<Script>local HOSTNAME = Input.GetText("CONFIG_FTP_HOST");
 local USERNAME = Input.GetText("CONFIG_FTP_USERNAME");
+local PASSWORD = Input.GetText("CONFIG_FTP_PASSWORD");
+local PATCHESFOLDER = Input.GetText("CONFIG_FTP_PATCHESFOLDER");
 
-if(HOST ~= "")then
+local MakeTest = (true);
+
+function TestFTP()
+	FTP.Connect(HOSTNAME, USERNAME, Input.GetText("CONFIG_FTP_PASSWORD"), "", true);
+	local FTPError = Application.GetLastError();
+	if(FTPError ~= FTP.OK)then
+		PrintLog("FTP Connection Test -&gt; ".._tblErrorMessages[FTPError], "", "INFO");FTP.GetLog()
+	else
+		PrintLog("FTP Connection Test -&gt; Connected to FTP Server successfully.", "", "SUCCESS");
+				
+		local FolderExist = (true);
+		local VersionFileExist = (false);
+				
+		FTP.ChangeDir(PATCHESFOLDER);
+		local WaitForError = FTP.GetLastResponse();
+		if(String.Left(WaitForError, 3) == "550")then
+			FolderExist = (false);
+		else
+			local FileList = FTP.ListFiles();
+			if(#FileList &gt; 0)then
+				for Count = 1, #FileList do
+					if(FileList[Count].Name == "version.txt")then
+						VersionFileExist = (true);
+						break;
+					end
+				end
+			end
+		end
+				
+		if(FolderExist == false)then
+			PrintLog("FTP Connection Test -&gt; Folder : '"..PATCHESFOLDER.."' does not exist on Server or path is wrong.", "", "ERROR");
+		else
+			PrintLog("FTP Connection Test -&gt; Folder : '"..PATCHESFOLDER.."' was found.", "", "SUCCESS");
+		end
+				
+		if(VersionFileExist == false)then
+			PrintLog("FTP Connection Test -&gt; Version File(version.txt) does not exist or path is wrong.", "", "ERROR");
+		else
+			PrintLog("FTP Connection Test -&gt; Version File(version.txt) was found.", "", "SUCCESS");
+		end
+				
+		FTP.Disconnect();
+	end
+end
+
+if(HOSTNAME == "" or FTP.IsValidHostname(HOSTNAME) == false)then
+	Input.SetProperties("CONFIG_FTP_HOST", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_FTP_HOST");
+	MakeTest = (false);
+end
+
+if(USERNAME == "")then
+	Input.SetProperties("CONFIG_FTP_USERNAME", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_FTP_USERNAME");
+	MakeTest = (false);
+end
+--[[
+if(PASSWORD == "")then
+	Input.SetProperties("CONFIG_FTP_PASSWORD", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_FTP_PASSWORD");
+	MakeTest = (false);
+end
+]]
+if(PATCHESFOLDER == "")then
+	Input.SetProperties("CONFIG_FTP_PATCHESFOLDER", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_FTP_PATCHESFOLDER");
+	MakeTest = (false);
+end
+
+if(MakeTest == true)then
 	StatusDlg.Show(MB_ICONNONE, false);
 	StatusDlg.ShowProgressMeter(false);
+	StatusDlg.SetAutoSize(true);
 	StatusDlg.SetTitle("FTP Test Connection");
 	StatusDlg.SetMessage("Please wait...");
 	
-	local Ret = Dialog.Message("FTP Test Connection", "You want to do a connection test in anonymous mode?", MB_YESNO, MB_ICONQUESTION, MB_DEFBUTTON1);
-
-	if(Ret == 7)then
-		if(FTP.IsValidHostname(HOST))then
-			FTP.Connect(HOST, USERNAME, Input.GetText("CONFIG_FTP_PASSWORD"), "", true);
-			local FTPError = Application.GetLastError();
-			if(FTPError ~= FTP.OK)then
-	    		PrintLog("FTP Connection Test -&gt; ".._tblErrorMessages[FTPError], "", "INFO");FTP.GetLog()
-	    		--PrintLog("FTP Connection Test -&gt; "..FTP.GetLog(), "", "INFO");
-	    	else
-	    		PrintLog("FTP Connection Test -&gt; Connection with the ftp server was established successfully.", "", "SUCCESS");
-	    		FTP.Disconnect();
-			end
-		else
-			Dialog.TimedMessage("FTP Connection Test", "Hostname not valid.", 1200, MB_ICONINFORMATION);
-			Input.SetProperties("CONFIG_FTP_HOST", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
-			Page.SetFocus("CONFIG_FTP_HOST");
+	if(FTP.IsConnected())then
+		local Ret = Dialog.Message("Warning", "Do you really want to close the current connection?", MB_YESNO, MB_ICONEXCLAMATION, MB_DEFBUTTON1);
+		if(Ret == 6)then
+			FTP.Disconnect();
+			
+			TestFTP();
 		end
-	elseif(Ret == 6)then
-		FTP.Connect(HOST);
-		local FTPError = Application.GetLastError();
-		if(FTPError ~= FTP.OK)then
-	    	PrintLog("FTP Connection Test -&gt; ".._tblErrorMessages[FTPError], "", "INFO");
-	    	--PrintLog("FTP Connection Test -&gt; "..FTP.GetLog(), "", "INFO");
-	    else
-	    	PrintLog("FTP Connection Test -&gt; Connection with the ftp server was established successfully.", "", "SUCCESS");
-	    	FTP.Disconnect();
-		end
+	else
+		TestFTP();
 	end
+	
 	StatusDlg.SetStatusText("Connection Test finished.");
 	StatusDlg.Hide();
-else
-	Input.SetProperties("CONFIG_FTP_HOST", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
-	Page.SetFocus("CONFIG_FTP_HOST");
 end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>18</DesignCodeLine>
-<DesignCodeCol>10</DesignCodeCol>
+<DesignCodeLine>13</DesignCodeLine>
+<DesignCodeCol>12</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -2440,7 +2832,7 @@ end</Script>
 </Action>
 </Actions>
 <Options>
-<Text>TEST</Text>
+<Text>Test Connection</Text>
 <TextColor format="hex">000000</TextColor>
 <EnableMarkup>0</EnableMarkup>
 <ButtonImage/>
@@ -2468,23 +2860,23 @@ end</Script>
 </Object>
 <Object>
 <Type>10</Type>
-<Name>CONFIG_FTP_PROFILESELECTOR</Name>
+<Name>CONFIG_PROFILESELECTOR</Name>
 <VisibleAtDesignTime>1</VisibleAtDesignTime>
 <VisibleAtRunTime>0</VisibleAtRunTime>
 <Locked>0</Locked>
 <Enabled>1</Enabled>
-<ToolTip>Select FTP Profile.</ToolTip>
+<ToolTip>Select FTP/MySQL Profile.</ToolTip>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
-<Top>240</Top>
-<Bottom>263</Bottom>
-<Left>30</Left>
-<Right>141</Right>
+<Top>40</Top>
+<Bottom>63</Bottom>
+<Left>200</Left>
+<Right>321</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2498,9 +2890,12 @@ end</Script>
 Input.SetText("CONFIG_FTP_HOST", getValue[1]);
 Input.SetText("CONFIG_FTP_USERNAME", getValue[2]);
 Input.SetText("CONFIG_FTP_PASSWORD", Crypto.BlowfishDecryptString(getValue[3], "iddqd"));
+Input.SetText("CONFIG_FTP_PATCHESFOLDER", getValue[4]);
 
-Input.SetText("CONFIG_FTP_LAUNCHERFOLDER", getValue[4]);
-Input.SetText("CONFIG_FTP_PATCHESFOLDER", getValue[5]);
+Input.SetText("CONFIG_MYSQL_HOST", getValue[5]);
+Input.SetText("CONFIG_MYSQL_USERNAME", getValue[6]);
+Input.SetText("CONFIG_MYSQL_PASSWORD", Crypto.BlowfishDecryptString(getValue[7], "iddqd"));
+Input.SetText("CONFIG_MYSQL_DBDATA", getValue[8]);
 
 INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemText(this, e_Selection));</Script>
 <TreeStates>
@@ -2508,8 +2903,8 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>4</DesignCodeLine>
-<DesignCodeCol>58</DesignCodeCol>
+<DesignCodeLine>12</DesignCodeLine>
+<DesignCodeCol>96</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -2571,105 +2966,9 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <VisibleAtRunTime>0</VisibleAtRunTime>
 <Locked>0</Locked>
 <Enabled>1</Enabled>
-<ToolTip/>
+<ToolTip>Example : lc_updater/patches</ToolTip>
 <Cursor>0</Cursor>
-<Group>5</Group>
-<MaintainAspectRatio>0</MaintainAspectRatio>
-<Pin>0</Pin>
-<TabIndex>-1</TabIndex>
-<AutoResize>0</AutoResize>
-<Coordinates>
-<Top>210</Top>
-<Bottom>230</Bottom>
-<Left>120</Left>
-<Right>231</Right>
-</Coordinates>
-<Ratios>
-<WidthRatio>-1.000000</WidthRatio>
-<HeightRatio>-1.000000</HeightRatio>
-</Ratios>
-<Event>
-<Name>On Key</Name>
-<Args>number e_Key, table e_Modifiers</Args>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>4079394</DesignCodeLine>
-<DesignCodeCol>7300137</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Focus</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Char</Name>
-<Args>number e_Char, table e_Modifiers</Args>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Actions/>
-<Text>
-<Body/>
-<TextColor>0</TextColor>
-<BackgroundColor>16777215</BackgroundColor>
-<FontData>
-<FontName>Segoe UI</FontName>
-<CharacterSet>0</CharacterSet>
-<Height>-12</Height>
-<Weight>400</Weight>
-<Italic>0</Italic>
-<Underline>0</Underline>
-<StrikeOut>0</StrikeOut>
-<AntiAlias>1</AntiAlias>
-</FontData>
-<Alignment>1</Alignment>
-<RightToLeftReadingOrder>0</RightToLeftReadingOrder>
-</Text>
-<Box>
-<BorderStyle>1</BorderStyle>
-<VerticalScrollbar>1</VerticalScrollbar>
-<HorizontalScrollbar>0</HorizontalScrollbar>
-<Style>0</Style>
-<Mode>0</Mode>
-<Mask/>
-<MaskSymbol> </MaskSymbol>
-<MaskRetMode>0</MaskRetMode>
-<ReadOnly>0</ReadOnly>
-</Box>
-</Object>
-<Object>
-<Type>7</Type>
-<Name>CONFIG_FTP_LAUNCHERFOLDER</Name>
-<VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>0</VisibleAtRunTime>
-<Locked>0</Locked>
-<Enabled>1</Enabled>
-<ToolTip/>
-<Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -2677,8 +2976,8 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <Coordinates>
 <Top>180</Top>
 <Bottom>200</Bottom>
-<Left>120</Left>
-<Right>231</Right>
+<Left>110</Left>
+<Right>271</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2687,14 +2986,14 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <Event>
 <Name>On Key</Name>
 <Args>number e_Key, table e_Modifiers</Args>
-<Script/>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>4079394</DesignCodeLine>
-<DesignCodeCol>7300137</DesignCodeCol>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>98</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -2765,7 +3064,7 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>1</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>1</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -2773,8 +3072,8 @@ INIFile.SetValue(SettingsFile, "General", "SelectedProfile", ComboBox.GetItemTex
 <Coordinates>
 <Top>151</Top>
 <Bottom>169</Bottom>
-<Left>214</Left>
-<Right>232</Right>
+<Left>254</Left>
+<Right>272</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2872,7 +3171,7 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -2880,8 +3179,8 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Coordinates>
 <Top>150</Top>
 <Bottom>171</Bottom>
-<Left>120</Left>
-<Right>211</Right>
+<Left>110</Left>
+<Right>251</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2890,14 +3189,14 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Event>
 <Name>On Key</Name>
 <Args>number e_Key, table e_Modifiers</Args>
-<Script/>
+<Script>--Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>4079394</DesignCodeLine>
-<DesignCodeCol>7300137</DesignCodeCol>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>2</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -2968,7 +3267,7 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -2976,8 +3275,8 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Coordinates>
 <Top>120</Top>
 <Bottom>140</Bottom>
-<Left>120</Left>
-<Right>231</Right>
+<Left>110</Left>
+<Right>271</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -2986,14 +3285,14 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Event>
 <Name>On Key</Name>
 <Args>number e_Key, table e_Modifiers</Args>
-<Script/>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
 <DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
+<DesignCodeCol>98</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -3064,7 +3363,7 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -3072,8 +3371,8 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Coordinates>
 <Top>90</Top>
 <Bottom>110</Bottom>
-<Left>120</Left>
-<Right>231</Right>
+<Left>110</Left>
+<Right>271</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -3082,7 +3381,7 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Event>
 <Name>On Key</Name>
 <Args>number e_Key, table e_Modifiers</Args>
-<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber("0xFFFFFF")});</Script>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
@@ -3160,7 +3459,7 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>1</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>1</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -3168,8 +3467,8 @@ Input.SetProperties("CONFIG_FTP_PASSWORD", {InputStyle = 1});</Script>
 <Coordinates>
 <Top>41</Top>
 <Bottom>59</Bottom>
-<Left>222</Left>
-<Right>240</Right>
+<Left>162</Left>
+<Right>180</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -3270,7 +3569,7 @@ end</Script>
 <Enabled>1</Enabled>
 <ToolTip/>
 <Cursor>0</Cursor>
-<Group>5</Group>
+<Group>0</Group>
 <MaintainAspectRatio>0</MaintainAspectRatio>
 <Pin>0</Pin>
 <TabIndex>-1</TabIndex>
@@ -3279,7 +3578,7 @@ end</Script>
 <Top>40</Top>
 <Bottom>61</Bottom>
 <Left>20</Left>
-<Right>220</Right>
+<Right>160</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -3372,10 +3671,10 @@ end</Script>
 <TabIndex>-1</TabIndex>
 <AutoResize>14</AutoResize>
 <Coordinates>
-<Top>291</Top>
-<Bottom>401</Bottom>
+<Top>260</Top>
+<Bottom>379</Bottom>
 <Left>-1</Left>
-<Right>701</Right>
+<Right>551</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -3588,10 +3887,100 @@ end</Script>
 <MouseClickSound/>
 </Object>
 <Object>
-<Type>20</Type>
-<Name>xButton1</Name>
+<Type>40</Type>
+<Name>CONFIG_MYSQLFRAME</Name>
 <VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>1</VisibleAtRunTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>1</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>70</Top>
+<Bottom>241</Bottom>
+<Left>290</Left>
+<Right>531</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On RightClick</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions/>
+<PLUGIN>
+<DLLFile>ShapeEx\ShapeEx.apo</DLLFile>
+<CustomData>0,6579300,1,-1,30,30,110,30,20,2,0,0,0</CustomData>
+</PLUGIN>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Object>
+<Object>
+<Type>2</Type>
+<Name>CONFIG_MYSQLTEXTFRAME</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
 <Locked>0</Locked>
 <Enabled>1</Enabled>
 <ToolTip/>
@@ -3602,10 +3991,10 @@ end</Script>
 <TabIndex>-1</TabIndex>
 <AutoResize>0</AutoResize>
 <Coordinates>
-<Top>20</Top>
-<Bottom>43</Bottom>
-<Left>625</Left>
-<Right>700</Right>
+<Top>59</Top>
+<Bottom>83</Bottom>
+<Left>300</Left>
+<Right>345</Right>
 </Coordinates>
 <Ratios>
 <WidthRatio>-1.000000</WidthRatio>
@@ -3614,49 +4003,1175 @@ end</Script>
 <Event>
 <Name>On Click</Name>
 <Args/>
-<Script>if(Grid.GetRowCount("Grid1") &gt; 0)then
-	local TempFolder = (_SourceFolder.."\\temp");
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>1701603654</DesignCodeLine>
+<DesignCodeCol>658750</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>1869177973</DesignCodeLine>
+<DesignCodeCol>3670016</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>5857125</DesignCodeLine>
+<DesignCodeCol>655370</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>658750</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Text>
+<Body>MySQL</Body>
+<NormalColor>2147483647</NormalColor>
+<HighlightColor>2147483647</HighlightColor>
+<MouseDownColor>2147483647</MouseDownColor>
+<DisabledColor>12632256</DisabledColor>
+<BorderColor>0</BorderColor>
+<BackColor>15790320</BackColor>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>1</Alignment>
+<TransBG>0</TransBG>
+<VSMode>2</VSMode>
+<HSMode>2</HSMode>
+<SBStyle>0</SBStyle>
+<SBSkin/>
+<Border>0</Border>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Text>
+</Object>
+<Object>
+<Type>2</Type>
+<Name>CONFIG_Paragraph6</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>88</Top>
+<Bottom>112</Bottom>
+<Left>290</Left>
+<Right>361</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Text>
+<Body>Hostname</Body>
+<NormalColor>0</NormalColor>
+<HighlightColor>0</HighlightColor>
+<MouseDownColor>0</MouseDownColor>
+<DisabledColor>12632256</DisabledColor>
+<BorderColor>0</BorderColor>
+<BackColor>16777215</BackColor>
+<FontData>
+<FontName>Segoe UI Semibold</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>600</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>2</Alignment>
+<TransBG>1</TransBG>
+<VSMode>2</VSMode>
+<HSMode>2</HSMode>
+<SBStyle>0</SBStyle>
+<SBSkin/>
+<Border>0</Border>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Text>
+</Object>
+<Object>
+<Type>7</Type>
+<Name>CONFIG_MYSQL_HOST</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>90</Top>
+<Bottom>110</Bottom>
+<Left>360</Left>
+<Right>521</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Key</Name>
+<Args>number e_Key, table e_Modifiers</Args>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>98</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Focus</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Char</Name>
+<Args>number e_Char, table e_Modifiers</Args>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions/>
+<Text>
+<Body/>
+<TextColor>0</TextColor>
+<BackgroundColor>16777215</BackgroundColor>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>1</Alignment>
+<RightToLeftReadingOrder>0</RightToLeftReadingOrder>
+</Text>
+<Box>
+<BorderStyle>1</BorderStyle>
+<VerticalScrollbar>1</VerticalScrollbar>
+<HorizontalScrollbar>0</HorizontalScrollbar>
+<Style>0</Style>
+<Mode>0</Mode>
+<Mask/>
+<MaskSymbol> </MaskSymbol>
+<MaskRetMode>0</MaskRetMode>
+<ReadOnly>0</ReadOnly>
+</Box>
+</Object>
+<Object>
+<Type>2</Type>
+<Name>CONFIG_Paragraph7</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>118</Top>
+<Bottom>142</Bottom>
+<Left>290</Left>
+<Right>361</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Text>
+<Body>Username</Body>
+<NormalColor>0</NormalColor>
+<HighlightColor>0</HighlightColor>
+<MouseDownColor>0</MouseDownColor>
+<DisabledColor>12632256</DisabledColor>
+<BorderColor>0</BorderColor>
+<BackColor>16777215</BackColor>
+<FontData>
+<FontName>Segoe UI Semibold</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>600</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>2</Alignment>
+<TransBG>1</TransBG>
+<VSMode>2</VSMode>
+<HSMode>2</HSMode>
+<SBStyle>0</SBStyle>
+<SBSkin/>
+<Border>0</Border>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Text>
+</Object>
+<Object>
+<Type>7</Type>
+<Name>CONFIG_MYSQL_USERNAME</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>120</Top>
+<Bottom>140</Bottom>
+<Left>360</Left>
+<Right>521</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Key</Name>
+<Args>number e_Key, table e_Modifiers</Args>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>98</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Focus</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Char</Name>
+<Args>number e_Char, table e_Modifiers</Args>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions/>
+<Text>
+<Body/>
+<TextColor>0</TextColor>
+<BackgroundColor>16777215</BackgroundColor>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>1</Alignment>
+<RightToLeftReadingOrder>0</RightToLeftReadingOrder>
+</Text>
+<Box>
+<BorderStyle>1</BorderStyle>
+<VerticalScrollbar>1</VerticalScrollbar>
+<HorizontalScrollbar>0</HorizontalScrollbar>
+<Style>0</Style>
+<Mode>0</Mode>
+<Mask/>
+<MaskSymbol> </MaskSymbol>
+<MaskRetMode>0</MaskRetMode>
+<ReadOnly>0</ReadOnly>
+</Box>
+</Object>
+<Object>
+<Type>2</Type>
+<Name>CONFIG_Paragraph8</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>148</Top>
+<Bottom>172</Bottom>
+<Left>290</Left>
+<Right>361</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Text>
+<Body>Password</Body>
+<NormalColor>0</NormalColor>
+<HighlightColor>0</HighlightColor>
+<MouseDownColor>0</MouseDownColor>
+<DisabledColor>12632256</DisabledColor>
+<BorderColor>0</BorderColor>
+<BackColor>16777215</BackColor>
+<FontData>
+<FontName>Segoe UI Semibold</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>600</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>2</Alignment>
+<TransBG>1</TransBG>
+<VSMode>2</VSMode>
+<HSMode>2</HSMode>
+<SBStyle>0</SBStyle>
+<SBSkin/>
+<Border>0</Border>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Text>
+</Object>
+<Object>
+<Type>3</Type>
+<Name>CONFIG_MYSQL_SHOWHIDE_PASSWORD</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>1</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>1</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>151</Top>
+<Bottom>169</Bottom>
+<Left>504</Left>
+<Right>522</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script>Image.Load(this, "AutoPlay\\Images\\eye-18-2.png");
+Input.SetProperties("CONFIG_MYSQL_PASSWORD", {InputStyle = 0});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>1</DesignCodeLine>
+<DesignCodeCol>40</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script>Image.Load(this, "AutoPlay\\Images\\eye-18.png");
+Input.SetProperties("CONFIG_MYSQL_PASSWORD", {InputStyle = 1});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>1</DesignCodeLine>
+<DesignCodeCol>40</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<NormalImage>
+<Filename>AutoPlay\Images\eye-18.png</Filename>
+<UseTransColor>0</UseTransColor>
+<TransClr>16777215</TransClr>
+<TransTolerance>10</TransTolerance>
+<Opacity>100</Opacity>
+<HTMode>0</HTMode>
+</NormalImage>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Object>
+<Object>
+<Type>7</Type>
+<Name>CONFIG_MYSQL_PASSWORD</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>150</Top>
+<Bottom>171</Bottom>
+<Left>360</Left>
+<Right>501</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Key</Name>
+<Args>number e_Key, table e_Modifiers</Args>
+<Script>--Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>2</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Focus</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Char</Name>
+<Args>number e_Char, table e_Modifiers</Args>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions/>
+<Text>
+<Body/>
+<TextColor>0</TextColor>
+<BackgroundColor>16777215</BackgroundColor>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>1</Alignment>
+<RightToLeftReadingOrder>0</RightToLeftReadingOrder>
+</Text>
+<Box>
+<BorderStyle>1</BorderStyle>
+<VerticalScrollbar>1</VerticalScrollbar>
+<HorizontalScrollbar>0</HorizontalScrollbar>
+<Style>0</Style>
+<Mode>1</Mode>
+<Mask/>
+<MaskSymbol> </MaskSymbol>
+<MaskRetMode>0</MaskRetMode>
+<ReadOnly>0</ReadOnly>
+</Box>
+</Object>
+<Object>
+<Type>2</Type>
+<Name>CONFIG_Paragraph9</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>178</Top>
+<Bottom>202</Bottom>
+<Left>290</Left>
+<Right>361</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Text>
+<Body>DB DATA</Body>
+<NormalColor>0</NormalColor>
+<HighlightColor>0</HighlightColor>
+<MouseDownColor>0</MouseDownColor>
+<DisabledColor>12632256</DisabledColor>
+<BorderColor>0</BorderColor>
+<BackColor>16777215</BackColor>
+<FontData>
+<FontName>Segoe UI Semibold</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>600</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>2</Alignment>
+<TransBG>1</TransBG>
+<VSMode>2</VSMode>
+<HSMode>2</HSMode>
+<SBStyle>0</SBStyle>
+<SBSkin/>
+<Border>0</Border>
+<MouseOverSndMode>0</MouseOverSndMode>
+<MouseOverSound/>
+<MouseClickSndMode>0</MouseClickSndMode>
+<MouseClickSound/>
+</Text>
+</Object>
+<Object>
+<Type>7</Type>
+<Name>CONFIG_MYSQL_DBDATA</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>180</Top>
+<Bottom>200</Bottom>
+<Left>360</Left>
+<Right>521</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Key</Name>
+<Args>number e_Key, table e_Modifiers</Args>
+<Script>Input.SetProperties(this, {BackgroundColor = Math.HexColorToNumber(Theme.ObjectBackgroundColor)});</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>98</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Focus</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Char</Name>
+<Args>number e_Char, table e_Modifiers</Args>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions/>
+<Text>
+<Body/>
+<TextColor>0</TextColor>
+<BackgroundColor>16777215</BackgroundColor>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+<Alignment>1</Alignment>
+<RightToLeftReadingOrder>0</RightToLeftReadingOrder>
+</Text>
+<Box>
+<BorderStyle>1</BorderStyle>
+<VerticalScrollbar>1</VerticalScrollbar>
+<HorizontalScrollbar>0</HorizontalScrollbar>
+<Style>0</Style>
+<Mode>0</Mode>
+<Mask/>
+<MaskSymbol> </MaskSymbol>
+<MaskRetMode>0</MaskRetMode>
+<ReadOnly>0</ReadOnly>
+</Box>
+</Object>
+<Object>
+<Type>20</Type>
+<Name>CONFIG_MYSQL_TEST</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip>Test MySQL Connection(Setup from fields, not need be saved on first place).</ToolTip>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>210</Top>
+<Bottom>233</Bottom>
+<Left>300</Left>
+<Right>521</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script>local HOSTNAME = Input.GetText("CONFIG_MYSQL_HOST");
+local USERNAME = Input.GetText("CONFIG_MYSQL_USERNAME");
+local PASSWORD = Input.GetText("CONFIG_MYSQL_PASSWORD");
+local DBDATA = Input.GetText("CONFIG_MYSQL_DBDATA");
 
-	Folder.Create(TempFolder);
+local MakeTest = (true);
+
+if(HOSTNAME == "")then
+	Input.SetProperties("CONFIG_MYSQL_HOST", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_MYSQL_HOST");
+	MakeTest = (false);
+end
+
+if(USERNAME == "")then
+	Input.SetProperties("CONFIG_MYSQL_USERNAME", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_MYSQL_USERNAME");
+	MakeTest = (false);
+end
+--[[
+if(PASSWORD == "")then
+	Input.SetProperties("CONFIG_MYSQL_PASSWORD", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_MYSQL_PASSWORD");
+	MakeTest = (false);
+end
+]]
+if(DBDATA == "")then
+	Input.SetProperties("CONFIG_MYSQL_DBDATA", {BackgroundColor = Math.HexColorToNumber(Theme.RedColor)});
+	Page.SetFocus("CONFIG_MYSQL_DBDATA");
+	MakeTest = (false);
+end
+
+if(MakeTest == true)then
+	StatusDlg.Show(MB_ICONNONE, false);
+	StatusDlg.ShowProgressMeter(false);
+	StatusDlg.SetAutoSize(true);
+	StatusDlg.SetTitle("MySQL Test Connection");
+	StatusDlg.SetMessage("Please wait...");
 	
-	for Count = 1, Grid.GetRowCount("Grid1") do
-		local Path = String.Replace(Grid.GetCellText("Grid1", Count, 2), WorkingFolder, "", true);
-		local Split = String.SplitPath(_SourceFolder.."\\temp\\"..Path);
-
-		if(Split.Extension == "")then--FOLDER
-			local BuildingPath = (_SourceFolder.."\\temp");
-			for _, FolderName in pairs(DelimitedToTable(Path, "\\")) do
-				Folder.Create(BuildingPath.."\\"..FolderName);
-				BuildingPath = (BuildingPath.."\\"..FolderName);
-			end
-		else---------------------------FILE
-			if(Folder.DoesExist(Split.Drive..Split.Folder))then
-				File.Copy(Grid.GetCellText("Grid1", Count, 2), _SourceFolder.."\\temp\\"..Path, true, true, false, true, nil);
-			else
-				local BuildingPath = (_SourceFolder.."\\temp");
-				local Split2 = String.SplitPath(Path);
-				for _, FolderName in pairs(DelimitedToTable(String.Replace(Path, "\\"..Split2.Filename..Split2.Extension, "", true), "\\")) do
-					Folder.Create(BuildingPath.."\\"..FolderName);
-					BuildingPath = (BuildingPath.."\\"..FolderName);
-				end
-				
-				if(Folder.DoesExist(Split.Drive..Split.Folder))then
-					File.Copy(Grid.GetCellText("Grid1", Count, 2), _SourceFolder.."\\temp\\"..Path, true, true, false, true, nil);
-				end
-			end
-		end
+	MySQLConnection, MySQLError = MySQL:connect(DBDATA, USERNAME, PASSWORD, HOSTNAME, 3306);
+	if(MySQLConnection)then
+		PrintLog("MySQL Connection Test -&gt; Connected to MySQL Server successfully.", "", "SUCCESS");
 		
+		MySQLCursor, MySQLError = MySQLConnection:execute("SELECT * FROM "..DBDATA..".t_clientversion");
+		if(MySQLError ~= nil)then
+			PrintLog("MySQL Connection Test -&gt; "..String.Right(MySQLError, String.Length(MySQLError)-8), "", "ERROR");
+		else
+			PrintLog("MySQL Connection Test -&gt; Table : 't_clientversion' was found.", "", "SUCCESS");
+			MySQLCursor:close();
+		end
+	elseif(MySQLError ~= nil)then
+		PrintLog("MySQL Connection Test -&gt; "..String.Right(MySQLError, String.Length(MySQLError)-8), "", "ERROR");
 	end
-else
-	--error pls make stage 1 first.
+	
+	StatusDlg.SetStatusText("Connection Test finished.");
+	StatusDlg.Hide();
 end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>21</DesignCodeLine>
-<DesignCodeCol>98</DesignCodeCol>
+<DesignCodeLine>47</DesignCodeLine>
+<DesignCodeCol>23</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -3729,14 +5244,14 @@ end</Script>
 </Action>
 </Actions>
 <Options>
-<Text>Click Here</Text>
+<Text>Test Connection</Text>
 <TextColor format="hex">000000</TextColor>
 <EnableMarkup>0</EnableMarkup>
 <ButtonImage/>
 <TextAlignment>2</TextAlignment>
 <ImageAlignment>0</ImageAlignment>
 <ImageTextRelation>3</ImageTextRelation>
-<Theme>6</Theme>
+<Theme>1</Theme>
 <Style>0</Style>
 <State>0</State>
 <MouseOverSoundMode>0</MouseOverSoundMode>
@@ -3755,6 +5270,130 @@ end</Script>
 <AntiAlias>1</AntiAlias>
 </FontData>
 </Object>
+<Object>
+<Type>15</Type>
+<Name>CONFIG_SAVELOG</Name>
+<VisibleAtDesignTime>1</VisibleAtDesignTime>
+<VisibleAtRunTime>0</VisibleAtRunTime>
+<Locked>0</Locked>
+<Enabled>1</Enabled>
+<ToolTip/>
+<Cursor>0</Cursor>
+<Group>0</Group>
+<MaintainAspectRatio>0</MaintainAspectRatio>
+<Pin>0</Pin>
+<TabIndex>-1</TabIndex>
+<AutoResize>0</AutoResize>
+<Coordinates>
+<Top>43</Top>
+<Bottom>60</Bottom>
+<Left>390</Left>
+<Right>461</Right>
+</Coordinates>
+<Ratios>
+<WidthRatio>-1.000000</WidthRatio>
+<HeightRatio>-1.000000</HeightRatio>
+</Ratios>
+<Event>
+<Name>On Click</Name>
+<Args/>
+<Script>if(CheckBox.GetChecked(this) == true)then
+	INIFile.SetValue(SettingsFile, "General", "SaveLog", "true");
+else
+	INIFile.SetValue(SettingsFile, "General", "SaveLog", "false");
+end</Script>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>3</DesignCodeLine>
+<DesignCodeCol>60</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Right-Click</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Enter</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Event>
+<Name>On Leave</Name>
+<Args/>
+<Script/>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+<DesignCodeLine>0</DesignCodeLine>
+<DesignCodeCol>0</DesignCodeCol>
+<BookMarks count="0">
+</BookMarks>
+</Event>
+<Actions>
+<Action>
+<Type>0</Type>
+<Name>None</Name>
+<Exit>0</Exit>
+<TreeStates>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+<TreeState>0</TreeState>
+</TreeStates>
+</Action>
+</Actions>
+<Options>
+<Text>Save Log</Text>
+<NormalColor format="hex">000000</NormalColor>
+<HighlightColor format="hex">000000</HighlightColor>
+<MouseDownColor format="hex">000000</MouseDownColor>
+<Disabled format="hex">c0c0c0</Disabled>
+<Alignment>0</Alignment>
+<ButtonAlign>0</ButtonAlign>
+<RTLReadingOrder>0</RTLReadingOrder>
+<Checked>0</Checked>
+<MouseOverSoundMode>0</MouseOverSoundMode>
+<MouseOverSound/>
+<MouseClickSoundMode>0</MouseClickSoundMode>
+<MouseClickSound/>
+</Options>
+<Font>
+<FontData>
+<FontName>Segoe UI</FontName>
+<CharacterSet>0</CharacterSet>
+<Height>-12</Height>
+<Weight>400</Weight>
+<Italic>0</Italic>
+<Underline>0</Underline>
+<StrikeOut>0</StrikeOut>
+<AntiAlias>1</AntiAlias>
+</FontData>
+</Font>
+</Object>
 <HGuidelines/>
 <VGuidelines/>
 </Page>
@@ -3771,13 +5410,13 @@ Please double-click on each item to find out how to install it.</DlgMsg>
 <HelpURL>http://www.yourdomain.com/help.htm</HelpURL>
 </MissingTechs>
 <ProgramPrefs>
-<OutputFolder/>
-<EXEName>autorun.exe</EXEName>
-<EnableAutoPlayFeatureBTF>1</EnableAutoPlayFeatureBTF>
+<OutputFolder>C:\Users\nicoh\Documents\AutoPlay Media Studio 8\Output\LastChaos Update Helper</OutputFolder>
+<EXEName>LCUpdate Helper.exe</EXEName>
+<EnableAutoPlayFeatureBTF>0</EnableAutoPlayFeatureBTF>
 <EnableAutoPlayFeatureCDRW>1</EnableAutoPlayFeatureCDRW>
 <EnableAutoPlayFeatureISO>1</EnableAutoPlayFeatureISO>
 <EnableAutoPlayFeatureSFX>0</EnableAutoPlayFeatureSFX>
-<TimeStampFilesBTF>0</TimeStampFilesBTF>
+<TimeStampFilesBTF>1</TimeStampFilesBTF>
 <TimeStampFilesCDRW>0</TimeStampFilesCDRW>
 <TimeStampFilesISO>0</TimeStampFilesISO>
 <ISOImageFile/>
@@ -3787,11 +5426,11 @@ Please double-click on each item to find out how to install it.</DlgMsg>
 <CDVolumeIdentifier>NEWDISC</CDVolumeIdentifier>
 <CacheFileData>1</CacheFileData>
 <UseBurnProof>1</UseBurnProof>
-<BuildType>0</BuildType>
+<BuildType>1</BuildType>
 <DriveLetter/>
 <UsePassword>0</UsePassword>
 <OpenFolder>1</OpenFolder>
-<ObscureFilenames>0</ObscureFilenames>
-<ObscureDataFolder>AutoPlay</ObscureDataFolder>
+<ObscureFilenames>1</ObscureFilenames>
+<ObscureDataFolder>Data</ObscureDataFolder>
 </ProgramPrefs>
 </DocumentData>
