@@ -12,3 +12,5 @@ Database Update.<br/>
 * Press Start for
 * 
 # Pics
+![main](https://user-images.githubusercontent.com/5092697/137606993-a21aa429-cc91-4a85-9177-067eee507487.jpg)
+![settings](https://user-images.githubusercontent.com/5092697/137606995-fd6097fa-e5ae-40de-8f3c-b44b91ba1ad8.jpg)
