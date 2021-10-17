@@ -5,18 +5,24 @@ File Watcher.<br/>
 FTP Upload.<br/>
 Database Update.<br/>
 
-# Information / Features
+# Information / Features / Notes
 * text
 
 # Workflow / How to use / How it work
 * __Stage 1__
 *   Start File watcher.
 * __Stage 2__
-*   Replicates the structure of detected files / folders to a temporary folder.
+*   Replicates the structure of detected Files / Folders to a Temporary folder.
 * __Stage 3__
 *   Step 1 Test connection to FTP Server.
 *   Step 2 Test connection to MySQL Database.
-*   Step 3
+*   Step 3 Find Patches folder on FTP Server.
+*   Step 4 Find Version file(version.txt) on patches folder.
+*   Step 5 Download Version file.
+*   Step 6 Does the ZIP with the files in the Temporary folder.
+*   Step 7 Upload ZIP file to FTP server.
+*   Step 8 Upload new Version file to FTP server.
+*   Step 9 Update min and max version on t_clientversion Database.
 
 
 # Pics
