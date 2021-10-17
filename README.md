@@ -3,6 +3,6 @@
 Helper for make Updates for the LastChaos client.<br/>
 
 # Information / Features
-
+* Designed around the __November__ files.<br/>
 
 # Pics
