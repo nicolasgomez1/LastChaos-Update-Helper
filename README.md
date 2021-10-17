@@ -6,9 +6,10 @@ FTP Upload.<br/>
 Database Update.<br/>
 
 # Quick Start
+coming soon
 
-# Information / Features / Notes
-* text
+# Warning
+* untested application, possible problems due to unforeseen or untested situations.
 
 # Workflow / How to use / How it work
 ### Stage 1
