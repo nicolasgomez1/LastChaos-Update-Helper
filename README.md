@@ -15,7 +15,7 @@ Database Update.<br/>
 *   Start File watcher.
 * __Stage 2__
 *   Replicates the structure of detected Files / Folders to a Temporary folder.
-* __Stage 3__
+* ###Stage 3###
 *   ´´´Step 1 Test connection to FTP Server.´´´
 *   Step 2 Test connection to MySQL Database.
 *   Step 3 Find Patches folder on FTP Server.
