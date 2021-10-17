@@ -9,11 +9,11 @@ Database Update.<br/>
 * text
 
 # Workflow / How to use / How it work
-* Stage 1
+* __Stage 1__
 *   Start File watcher.
-* Stage 2
+* __Stage 2__
 *   Replicates the structure of detected files / folders to a temporary folder.
-* Stage 3
+* __Stage 3__
 *   Step 1 Test connection to FTP Server.
 *   Step 2 Test connection to MySQL Database.
 *   Step 3
