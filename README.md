@@ -17,15 +17,15 @@ coming soon
 ### Stage 2
 *   ```Replicates the structure of detected Folders/Files to a Temporary folder.```
 ### Stage 3
-*   ```Step 1 Test connection to FTP Server.```
-*   ```Step 2 Test connection to MySQL Database.```
-*   ```Step 3 Find Patches folder on FTP Server.```
-*   ```Step 4 Find Version file(version.txt) on patches folder.```
-*   ```Step 5 Download Version file.```
-*   ```Step 6 Does the ZIP with the folders/files in the Temporary folder.```
-*   ```Step 7 Upload ZIP file to FTP server.```
-*   ```Step 8 Upload new Version file to FTP server.```
-*   ```Step 9 Update __a_min__ and __a_max__ version on __t_clientversion__ Database.```
+*   Step 1 Test connection to FTP Server.
+*   Step 2 Test connection to MySQL Database.
+*   Step 3 Find Patches folder on FTP Server.
+*   Step 4 Find Version file(version.txt) on patches folder.
+*   Step 5 Download Version file.
+*   Step 6 Does the ZIP with the folders/files in the Temporary folder.
+*   Step 7 Upload ZIP file to FTP server.
+*   Step 8 Upload new Version file to FTP server.
+*   Step 9 Update __a_min__ and __a_max__ version on __t_clientversion__ Database.
 
 
 # Pics
