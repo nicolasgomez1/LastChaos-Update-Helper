@@ -13,9 +13,9 @@ coming soon
 
 # Workflow / How to use / How it work (README WIP)
 ### Stage 1 / Start
-*   ```Detect changes on defined folder and print file/folder path on grid for nexts stages.```
+*   Detect changes on defined folder and print file/folder path on grid for nexts stages.
 ### Stage 2
-*   ```Replicates the structure of detected Folders/Files to a Temporary folder.```
+*   Replicates the structure of detected Folders/Files to a Temporary folder.
 ### Stage 3
 *   Step 1 Test connection to FTP Server.
 *   Step 2 Test connection to MySQL Database.
