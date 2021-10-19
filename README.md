@@ -11,7 +11,7 @@ coming soon
 # Warning
 * untested application, possible problems due to unforeseen or untested situations.
 
-# Workflow / How to use / How it work
+# Workflow / How to use / How it work (README WIP)
 ### Stage 1 / Start
 *   ```Detect changes on defined folder and print file/folder path on grid for nexts stages.```
 ### Stage 2
