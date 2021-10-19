@@ -12,7 +12,7 @@ coming soon
 * untested application, possible problems due to unforeseen or untested situations.
 
 # Workflow / How to use / How it work
-### Stage 1
+### Stage 1 / Start
 *   ```Detect changes on defined folder and print file/folder path on grid for nexts stages.```
 ### Stage 2
 *   ```Replicates the structure of detected Files / Folders to a Temporary folder.```
