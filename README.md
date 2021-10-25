@@ -1,6 +1,6 @@
 # LastChaos Update Helper (WIP)<img align="left" src="https://user-images.githubusercontent.com/5092697/138696231-2e0a32cb-ead0-4f59-97d9-8adead41c31f.png" width="150px">
 
-Helper for make Updates for LastChaos client.<br/>
+Helps automate the process of creating an Update for the LastChaos game client.<br/>
 File Watcher.<br/>
 FTP Upload.<br/>
 Database Update.<br/>
@@ -8,25 +8,10 @@ Database Update.<br/>
 # Quick Start
 coming soon
 
-# Warning
-* untested application, possible problems due to unforeseen or untested situations.
-
-# Workflow / How it work (README WIP)
-### Stage 1 / Start
-*   Detect changes on defined folder and print file/folder path on grid for nexts stages.
-### Stage 2
-*   Replicates the structure of detected Folders/Files to a Temporary folder.
-### Stage 3
-*   Step 1 Test connection to FTP Server.
-*   Step 2 Test connection to MySQL Database.
-*   Step 3 Find Patches folder on FTP Server.
-*   Step 4 Find Version file(version.txt) on patches folder.
-*   Step 5 Download Version file.
-*   Step 6 Does the ZIP with the folders/files in the Temporary folder.
-*   Step 7 Upload ZIP file to FTP server.
-*   Step 8 Upload new Version file to FTP server.
-*   Step 9 Update __a_min__ and __a_max__ version on __t_clientversion__ Database.
-
+# Notes
+* To avoid external problems, remember to give all the permissions to the ftp user. Verify that the defined path really exists, the application will not create folders.
+* If the file 'version.txt' is missing, one will be automatically created with the value 0 by default.
+* If the table 't_clientversion' is missing, it will be created automatically, the columns a_min and a_max will also be created. And they will be assigned 0 as the default value.
 
 # Pics
 ![main](https://user-images.githubusercontent.com/5092697/137606993-a21aa429-cc91-4a85-9177-067eee507487.jpg)
