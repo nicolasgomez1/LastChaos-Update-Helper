@@ -1,4 +1,4 @@
-# LastChaos Update Helper<img align="left" src="https://user-images.githubusercontent.com/5092697/138696231-2e0a32cb-ead0-4f59-97d9-8adead41c31f.png" width="130px">
+# LastChaos Update Helper<img align="left" src="https://user-images.githubusercontent.com/5092697/138696231-2e0a32cb-ead0-4f59-97d9-8adead41c31f.png" width="135px">
 
 Helps automate the process of creating an Update for the LastChaos game client.<br/>
 File Watcher.<br/>
