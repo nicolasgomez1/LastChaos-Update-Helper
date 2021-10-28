@@ -63,9 +63,9 @@
 <Tracks/>
 </AudioBGMusic>
 <Globals>
-<Script>require("FileWatcher");
+<Script>System.RegisterActiveX(_SourceFolder.."\\Autoplay\\Plugins\\JAMSHELLTREE\\ShellBrowserX.ocx");
 
-System.RegisterActiveX(_SourceFolder.."\\Autoplay\\Plugins\\JAMSHELLTREE\\ShellBrowserX.ocx");
+require("FileWatcher");
 
 SettingsFile	= (_SourceFolder.."\\config.ini");
 TempFolder		= (_SourceFolder.."\\TEMP");
@@ -232,15 +232,15 @@ function PrintLog(Text, Tooltip, Type)
 end</Script>
 <BookMarks count="0">
 </BookMarks>
-<DesignCodeLine>40</DesignCodeLine>
-<DesignCodeCol>35</DesignCodeCol>
+<DesignCodeLine>17</DesignCodeLine>
+<DesignCodeCol>5</DesignCodeCol>
 </Globals>
 <Defaults>
 <StartupPage>_PageFirst</StartupPage>
 <MouseOverSoundDefault>AutoPlay\Audio\High1.ogg</MouseOverSoundDefault>
 <MouseClickSoundDefault>AutoPlay\Audio\Click1.ogg</MouseClickSoundDefault>
 <MemMngMethod>0</MemMngMethod>
-<UserPrivilegeLevel>0</UserPrivilegeLevel>
+<UserPrivilegeLevel>2</UserPrivilegeLevel>
 </Defaults>
 <TargetMedia>
 <TargetMediaSize>4</TargetMediaSize>
@@ -335,16 +335,14 @@ if(GetConfig("General", "SaveLog") == "true")then
 		
 		StatusDlg.Hide();
 	end
-end
-
---System.UnregisterActiveX(_SourceFolder.."\\Autoplay\\Plugins\\JAMSHELLTREE\\ShellBrowserX.ocx");</Script>
+end</Script>
 <TreeStates>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>31</DesignCodeLine>
-<DesignCodeCol>2</DesignCodeCol>
+<DesignCodeLine>29</DesignCodeLine>
+<DesignCodeCol>3</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -416,10 +414,10 @@ if(e_ID == 2)then
 				tblMenu[1].SubMenu[5].Enabled = (false);
 				tblMenu[2].Enabled = (false);
 				
-				if(ListBox.IsVisible("FTPDirectory") == true)then
+				--[[if(ListBox.IsVisible("FTPDirectory") == true)then
 					ListBox.SetVisible("FTPDirectory", false);
 					Plugin.SetVisible("Grid", true);
-				end
+				end]]
 				
 				if(Plugin.IsVisible("TempList") == true)then
 					Plugin.SetVisible("TempList", false);
@@ -485,9 +483,9 @@ if(e_ID == 3)then---------------------------------------------------------------
 		if(Plugin.IsVisible("TempList") == false)then
 			Plugin.SetVisible("Grid", false);
 			Plugin.SetVisible("TempList", true);
-			--Paragraph.SetVisible("ParagraphDetails", true);
-			--Input.SetVisible("Size", true);
-			--Input.SetText("Size", "Temp Folder Size:");
+			--[[Paragraph.SetVisible("ParagraphDetails", true);
+			Input.SetVisible("Size", true);
+			Input.SetText("Size", "Temp Folder Size:");]]
 			Page.Redraw();
 		end
 		
@@ -607,20 +605,117 @@ if(e_ID == 4)then---------------------------------------------------------------
 			---
 			SetStatus("3.1.1", "Looking for Patches Directory", true);
 			
-			FTP.ChangeDir(ConnectionData[4]);
+			FTP.ChangeDir("/"..ConnectionData[4]);
 			local FTPError = FTP.GetLastResponse();
 			
 			SetStatus("3.1.1", nil, false);
 			
 			if(String.Left(FTPError, 3) == "550")then
-				FTP.Disconnect();
-				
 				StatusDlg.SetMessage("Looking for '"..ConnectionData[4].."' directory failed.");
 				StatusDlg.SetStatusText(String.Replace(FTPError, "\r\n", "", false));
 				
-				PrintLog("Stage 3 -&gt; FTP Error : "..String.Replace(FTPError, "\r\n", "", false).." Cannot continue.", "", "ERROR");
-				--Aqui iria la funcion para crear el directorio.###################################################################################################################################################################
-				Continue = (false);
+				local Ret = Dialog.Message("Stage 3", "Directory "..ConnectionData[4].." does not exist, do you want to create it?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
+				if(Ret == "CANCEL" or Ret == 7)then
+					PrintLog("Stage 3 -&gt; FTP Error : "..String.Replace(FTPError, "\r\n", "", false).." Cannot continue.", "", "ERROR");
+					
+					Continue = (false);
+				elseif(Ret == 6)then
+					local Directory = DelimitedToTable(ConnectionData[4], "/");
+					for _, FolderName in pairs(Directory) do
+						FTP.MakeDir(FolderName);
+						local FTPError = Application.GetLastError();
+						if(FTPError ~= FTP.OK)then
+	    					PrintLog("Stage 3 -&gt; FTP Error : ".._tblErrorMessages[FTPError].." Cannot continue.", "", "ERROR");
+	    					
+							Continue = (false);
+							
+							break;
+						elseif(FTPError == FTP.OK)then
+							PrintLog("Stage 3 -&gt; Folder : "..FolderName.." was been created!", "", "SUCCESS");
+							
+							FTP.ChangeDir("/"..FolderName);
+						end
+					end
+					
+					if(Continue == true)then
+						FTP.ChangeDir("/"..ConnectionData[4]);
+						---
+						PrintLog("Stage 3 -&gt; Directory : '"..ConnectionData[4].."' was found!", "", "SUCCESS");
+						---
+						StatusDlg.SetStatusText("Directory: '"..ConnectionData[4].."' was found.");
+						---
+						SetStatus("3.1.1.1", "Looking for Version file", true);
+						---
+						StatusDlg.SetMessage("Looking for Version file ('version.txt')...");
+						StatusDlg.SetStatusText("Directory: '"..ConnectionData[4].."/version.txt'");
+		
+						local FileList = FTP.ListFiles();
+						if(#FileList == 0)then
+							StatusDlg.SetMessage("Looking for Version file ('version.txt') failed.");
+							StatusDlg.SetStatusText("Directory: '"..ConnectionData[4].."' is empty.");
+							
+							local Ret = Dialog.Message("Stage 3", "Version file ('version.txt') does not exist, do you want to create it?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
+							if(Ret == "CANCEL" or Ret == 7)then
+								PrintLog("Stage 3 -&gt; Directory : '"..ConnectionData[4].."' is empty. Cannot continue.", "", "ERROR");
+								
+								Continue = (false);
+							elseif(Ret == 6)then
+								while(true)do
+									local Ret = Dialog.Input("Stage 3 -&gt; Create new Version file", "Defines the Version that the New Version file will have", "0", MB_ICONNONE);
+									if(Ret ~= "CANCEL" and Ret ~= "")then
+										TextFile.WriteFromString(_SourceFolder.."\\NewVersionFile.txt.TEMP", Ret, false);
+										
+										StatusDlg.SetMessage("Uploading New Version file ('version.txt')...");
+										StatusDlg.ShowProgressMeter(true);
+				    					StatusDlg.SetMeterRange(0, 100);
+										
+										FTP.Upload(_SourceFolder.."\\NewVersionFile.txt.TEMP", "version.txt", FTPUploadCallback);
+										local FTPError = Application.GetLastError();
+										if(FTPError ~= FTP.OK)then
+											PrintLog("Stage 3 -&gt; FTP Error : ".._tblErrorMessages[FTPError].." Cannot continue.", "", "ERROR");
+											
+											Continue = (false);					
+										else
+											PrintLog("Stage 3 -&gt; New Version file ('version.txt') was created, with value "..Ret.." by default.", "", "SUCCESS");
+										end
+										
+										StatusDlg.ShowProgressMeter(false);
+										
+										break;
+									elseif(Ret == "CANCEL")then
+										Continue = (false);
+										break;
+									end
+								end
+							end
+						else
+							local VersionFileFound = (false);
+							
+							for Count = 1, #FileList do
+								if(FileList[Count].Name == "version.txt")then
+									VersionFileFound = (true);
+									break;
+								end
+							end
+							
+							if(VersionFileFound == false)then
+								PrintLog("Stage 3 -&gt; Version file ('version.txt') does not exist on '"..ConnectionData[4].."' Directory. Cannot continue.", "", "ERROR");
+								
+								StatusDlg.SetMessage("Looking for Version file ('version.txt') failed.");
+								StatusDlg.SetStatusText("Version file ('version.txt') does not found in '"..ConnectionData[4].."' Directory.");
+								
+								Continue = (false);
+							else
+								StatusDlg.SetMessage("Looking for Version file ('version.txt')...");
+								StatusDlg.SetStatusText("Version file ('version.txt') was found.");
+								
+								PrintLog("Stage 3 -&gt; Version file ('version.txt') was found!", "", "SUCCESS");
+							end
+						end
+						
+						SetStatus("3.1.1.1", nil, false);
+					end
+				end
 			else---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------Stage 3 -&gt; Looking for Version file
 				PrintLog("Stage 3 -&gt; Directory : '"..ConnectionData[4].."' was found!", "", "SUCCESS");
 				---
@@ -725,17 +820,17 @@ if(e_ID == 4)then---------------------------------------------------------------
 			SetStatus("3.2.1", "Looking for Version Table", true);
 			
 			StatusDlg.SetMessage("Looking for version table ('t_clientversion')...");
-			StatusDlg.SetStatusText("Table: 't_clientversion'");
+			StatusDlg.SetStatusText("Table: t_clientversion");
 			
 			MySQLCursor, MySQLError = MySQLConnection:execute("SELECT * FROM "..ConnectionData[8]..".t_clientversion");
 			if(MySQLError ~= nil)then
 				StatusDlg.SetStatusText("Table: 't_clientversion' not found.");
 				
-				local Ret = Dialog.Message("Stage 3", "Table : 't_clientversion' does not exist, do you want to create it?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
+				local Ret = Dialog.Message("Stage 3", "Table : t_clientversion does not exist, do you want to create it?", MB_YESNO, MB_ICONINFORMATION, MB_DEFBUTTON1);
 				if(Ret == "CANCEL" or Ret == 7)then
 					MySQLConnection:close();
 
-					PrintLog("Stage 3 -&gt; Table: 't_clientversion' not found. Cannot continue.", "", "ERROR");
+					PrintLog("Stage 3 -&gt; Table : t_clientversion not found. Cannot continue.", "", "ERROR");
 					
 					Continue = (false);
 				else
@@ -826,8 +921,8 @@ if(e_ID == 4)then---------------------------------------------------------------
 		Zip.Add(ZipPath, {TempFolder.."\\*.*"}, true, "", 5, ZipCallback, true);
 		local ZIPError = Application.GetLastError();
 		
-		--TreeList.SetRootFolder("TempList", _SourceFolder.."\\Updates");
-		--TreeList.ExpandAll("TempList");
+		--[[TreeList.SetRootFolder("TempList", _SourceFolder.."\\Updates");
+		TreeList.ExpandAll("TempList");]]
 		
 		SetStatus("3.4.1", nil, false);
 		
@@ -949,13 +1044,13 @@ if(e_ID == 4)then---------------------------------------------------------------
 		else
 			PrintLog("Stage 3 -&gt; Table : t_clientversion was updated successfully!", "New min version: "..NewVersion.."\r\nNew max version: "..NewVersion+1, "SUCCESS");
 			
-			Plugin.SetVisible("TempList", false);
+			--[[Plugin.SetVisible("TempList", false);
 			ListBox.SetVisible("FTPDirectory", true);
 			
 			local FileList = FTP.ListFiles();
 			for Count = 1, #FileList do
 				ListBox.AddItem("FTPDirectory", FileList[Count].Name, "");
-			end
+			end]]
 			
 			PrintLog("Stage 3 -&gt; Process completed successfully, the Update is out!", "", "SUCCESS");
 		end
@@ -969,6 +1064,9 @@ if(e_ID == 4)then---------------------------------------------------------------
 		tblMenu[1].SubMenu[3].Enabled = (false);
 		tblMenu[1].SubMenu[5].Enabled = (false);
 	end
+	
+	Plugin.SetVisible("TempList", false);
+	Plugin.SetVisible("Grid", true);
 	
 	StatusDlg.SetTitle("Stage 3 Cleaning residue");
 	StatusDlg.SetMessage("Cleaning TEMP Folder...");
@@ -997,7 +1095,9 @@ if(e_ID == 4)then---------------------------------------------------------------
 		File.Delete(_SourceFolder.."\\NewVersionFile.txt.TEMP", false, false, false, nil);
 	end
 	
-	MySQLConnection:close();
+	if(MySQLConnection ~= nil)then
+		MySQLConnection:close();
+	end
 	
 	if(FTP.IsConnected())then
 		FTP.Disconnect();
@@ -1047,12 +1147,12 @@ if(e_ID == 7)then
 	Shell.Execute("https://github.com/nicolasgomez1/LastChaos-Update-Helper", "open", "", "", SW_SHOWNORMAL, false);
 end</Script>
 <TreeStates>
-<TreeState>2</TreeState>
+<TreeState>0</TreeState>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>610</DesignCodeLine>
-<DesignCodeCol>1</DesignCodeCol>
+<DesignCodeLine>703</DesignCodeLine>
+<DesignCodeCol>32</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -1148,7 +1248,7 @@ end</Script>
 <Checked>0</Checked>
 <SubMenu>
 <MenuItem>
-<Text>Optimize updates</Text>
+<Text>Optimize Updates</Text>
 <ID>8</ID>
 <Enabled>0</Enabled>
 <Checked>0</Checked>
@@ -1158,7 +1258,7 @@ end</Script>
 <MenuItem>
 <Text>Manual Update Upload</Text>
 <ID>9</ID>
-<Enabled>1</Enabled>
+<Enabled>0</Enabled>
 <Checked>0</Checked>
 <SubMenu/>
 <IconID>-1</IconID>
@@ -1470,8 +1570,8 @@ end</Script>
 <TreeState>0</TreeState>
 <TreeState>0</TreeState>
 </TreeStates>
-<DesignCodeLine>175</DesignCodeLine>
-<DesignCodeCol>3</DesignCodeCol>
+<DesignCodeLine>22</DesignCodeLine>
+<DesignCodeCol>2</DesignCodeCol>
 <BookMarks count="0">
 </BookMarks>
 </Event>
@@ -1578,158 +1678,6 @@ GridEx.RedrawAll("Grid");</Script>
 <BookMarks count="0">
 </BookMarks>
 </Event>
-<Object>
-<Type>9</Type>
-<Name>FTPDirectory</Name>
-<VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>0</VisibleAtRunTime>
-<Locked>0</Locked>
-<Enabled>1</Enabled>
-<ToolTip/>
-<Cursor>0</Cursor>
-<Group>0</Group>
-<MaintainAspectRatio>0</MaintainAspectRatio>
-<Pin>0</Pin>
-<TabIndex>-1</TabIndex>
-<AutoResize>4</AutoResize>
-<Coordinates>
-<Top>-1</Top>
-<Bottom>397</Bottom>
-<Left>267</Left>
-<Right>1001</Right>
-</Coordinates>
-<Ratios>
-<WidthRatio>-1.000000</WidthRatio>
-<HeightRatio>-1.000000</HeightRatio>
-</Ratios>
-<Event>
-<Name>On Double-Click</Name>
-<Args/>
-<Script>local RootPath = ListBox.GetItemData("FTPDirectory", ListBox.GetSelected("FTPDirectory")[1]);
-
-if(ListBox.GetItemText("FTPDirectory", ListBox.GetSelected("FTPDirectory")[1]) == "[..]")then
-	ListBox.DeleteItem("FTPDirectory", -1);
-
-	for _, FilePath in pairs(File.Find(RootPath.."\\", "*.*", false, true, nil, nil)) do
-		local Split = String.SplitPath(FilePath);
-		if(Split.Extension == "")then
-			ListBox.AddItem("FTPDirectory", "[] "..Split.Filename, FilePath);
-		else
-			ListBox.AddItem("FTPDirectory", Split.Filename..Split.Extension, FilePath);
-		end
-	end
-else
-	local Split = String.SplitPath(RootPath);
-	if(Split.Extension == "")then
-		ListBox.DeleteItem("FTPDirectory", -1);
-		ListBox.AddItem("FTPDirectory", "[..]", Split.Drive.."\\"..Split.Folder);
-		
-		local FileList = File.Find(RootPath.."\\", "*.*", false, true, nil, nil);
-		
-		if(FileList ~= nil)then
-			for _, FilePath in pairs(FileList) do
-				local Split = String.SplitPath(FilePath);
-				if(Split.Extension == "")then
-					ListBox.AddItem("FTPDirectory", "[] "..Split.Filename, FilePath);
-				else
-					ListBox.AddItem("FTPDirectory", Split.Filename..Split.Extension, FilePath);
-				end
-			end
-		end
-	end
-end</Script>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>17</DesignCodeLine>
-<DesignCodeCol>69</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Select</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Key</Name>
-<Args>number e_Key, table e_Modifiers</Args>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Focus</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Check</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Actions/>
-<Text>
-<TextColor>1604346</TextColor>
-<BackgroundColor>4998456</BackgroundColor>
-<FontData>
-<FontName>Segoe UI</FontName>
-<CharacterSet>0</CharacterSet>
-<Height>-12</Height>
-<Weight>400</Weight>
-<Italic>0</Italic>
-<Underline>0</Underline>
-<StrikeOut>0</StrikeOut>
-<AntiAlias>1</AntiAlias>
-</FontData>
-</Text>
-<Window>
-<BorderStyle>1</BorderStyle>
-<VerticalScrollbar>1</VerticalScrollbar>
-<HorizontalScrollbar>0</HorizontalScrollbar>
-<Sort>0</Sort>
-<MultipleSelect>0</MultipleSelect>
-<ReadOrder>0</ReadOrder>
-<CheckList>0</CheckList>
-</Window>
-<ListBoxItems/>
-</Object>
 <Object>
 <Type>40</Type>
 <Name>TempList</Name>
@@ -2643,10 +2591,10 @@ end</Script>
 </Event>
 <Actions/>
 <Options>
-<ImageList/>
+<ImageList>AutoPlay\Images\MenuBar.bmp</ImageList>
 <BackgroundColor format="hex">38454c</BackgroundColor>
 <TextColor format="hex">fa7a18</TextColor>
-<TransparentImageListColor format="hex">ffffff</TransparentImageListColor>
+<TransparentImageListColor format="hex">38454c</TransparentImageListColor>
 <ShowCheckBoxes>0</ShowCheckBoxes>
 <HasLines>1</HasLines>
 <LinesAtRoot>0</LinesAtRoot>
@@ -2923,258 +2871,6 @@ end</Script>
 <AntiAlias>1</AntiAlias>
 </FontData>
 </Font>
-</Object>
-<Object>
-<Type>2</Type>
-<Name>Paragraph1</Name>
-<VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>1</VisibleAtRunTime>
-<Locked>0</Locked>
-<Enabled>1</Enabled>
-<ToolTip/>
-<Cursor>0</Cursor>
-<Group>0</Group>
-<MaintainAspectRatio>0</MaintainAspectRatio>
-<Pin>0</Pin>
-<TabIndex>-1</TabIndex>
-<AutoResize>0</AutoResize>
-<Coordinates>
-<Top>-148</Top>
-<Bottom>-17</Bottom>
-<Left>0</Left>
-<Right>922</Right>
-</Coordinates>
-<Ratios>
-<WidthRatio>-1.000000</WidthRatio>
-<HeightRatio>-1.000000</HeightRatio>
-</Ratios>
-<Event>
-<Name>On Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>3</DesignCodeLine>
-<DesignCodeCol>60</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Right-Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Enter</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Leave</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Actions>
-<Action>
-<Type>0</Type>
-<Name>None</Name>
-<Exit>0</Exit>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-</Action>
-</Actions>
-<Text>
-<Body>Actualizaciones futuras
-
-opcion para subir el parche a mano(dialogo para seleccionar el zip, y un dialog input, que come el nombre del zip para definir la version), dialogo de confirmacio y pa dentro
-
-cambiar el sistema para distinguir archivos de carpetas, y que en caso de que a una carpeta se le cambie el nombre copie todos los archivos del interior, por mas que sea la carpeta data.
-
-Poner el codigo para crear las carpetas definidas en el ftp directory</Body>
-<NormalColor>0</NormalColor>
-<HighlightColor>0</HighlightColor>
-<MouseDownColor>0</MouseDownColor>
-<DisabledColor>12632256</DisabledColor>
-<BorderColor>0</BorderColor>
-<BackColor>16777215</BackColor>
-<FontData>
-<FontName>Segoe UI</FontName>
-<CharacterSet>0</CharacterSet>
-<Height>-12</Height>
-<Weight>400</Weight>
-<Italic>0</Italic>
-<Underline>0</Underline>
-<StrikeOut>0</StrikeOut>
-<AntiAlias>1</AntiAlias>
-</FontData>
-<Alignment>0</Alignment>
-<TransBG>1</TransBG>
-<VSMode>2</VSMode>
-<HSMode>2</HSMode>
-<SBStyle>0</SBStyle>
-<SBSkin/>
-<Border>0</Border>
-<MouseOverSndMode>0</MouseOverSndMode>
-<MouseOverSound/>
-<MouseClickSndMode>0</MouseClickSndMode>
-<MouseClickSound/>
-</Text>
-</Object>
-<Object>
-<Type>2</Type>
-<Name>Paragraph2</Name>
-<VisibleAtDesignTime>1</VisibleAtDesignTime>
-<VisibleAtRunTime>1</VisibleAtRunTime>
-<Locked>0</Locked>
-<Enabled>1</Enabled>
-<ToolTip/>
-<Cursor>0</Cursor>
-<Group>0</Group>
-<MaintainAspectRatio>0</MaintainAspectRatio>
-<Pin>0</Pin>
-<TabIndex>-1</TabIndex>
-<AutoResize>0</AutoResize>
-<Coordinates>
-<Top>-140</Top>
-<Bottom>-39</Bottom>
-<Left>-260</Left>
-<Right>-10</Right>
-</Coordinates>
-<Ratios>
-<WidthRatio>-1.000000</WidthRatio>
-<HeightRatio>-1.000000</HeightRatio>
-</Ratios>
-<Event>
-<Name>On Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>3</DesignCodeLine>
-<DesignCodeCol>60</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Right-Click</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Enter</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Event>
-<Name>On Leave</Name>
-<Args/>
-<Script/>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-<DesignCodeLine>0</DesignCodeLine>
-<DesignCodeCol>0</DesignCodeCol>
-<BookMarks count="0">
-</BookMarks>
-</Event>
-<Actions>
-<Action>
-<Type>0</Type>
-<Name>None</Name>
-<Exit>0</Exit>
-<TreeStates>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-<TreeState>0</TreeState>
-</TreeStates>
-</Action>
-</Actions>
-<Text>
-<Body>Bug fix when select a new folder do not refresh before restart</Body>
-<NormalColor>0</NormalColor>
-<HighlightColor>0</HighlightColor>
-<MouseDownColor>0</MouseDownColor>
-<DisabledColor>12632256</DisabledColor>
-<BorderColor>0</BorderColor>
-<BackColor>16777215</BackColor>
-<FontData>
-<FontName>Segoe UI</FontName>
-<CharacterSet>0</CharacterSet>
-<Height>-12</Height>
-<Weight>400</Weight>
-<Italic>0</Italic>
-<Underline>0</Underline>
-<StrikeOut>0</StrikeOut>
-<AntiAlias>1</AntiAlias>
-</FontData>
-<Alignment>0</Alignment>
-<TransBG>1</TransBG>
-<VSMode>2</VSMode>
-<HSMode>2</HSMode>
-<SBStyle>0</SBStyle>
-<SBSkin/>
-<Border>0</Border>
-<MouseOverSndMode>0</MouseOverSndMode>
-<MouseOverSound/>
-<MouseClickSndMode>0</MouseClickSndMode>
-<MouseClickSound/>
-</Text>
 </Object>
 <HGuidelines/>
 <VGuidelines/>
